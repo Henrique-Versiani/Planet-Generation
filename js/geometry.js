@@ -64,7 +64,7 @@ class IcoSphere {
     subdivide(recursionLevel) {
         for (let i = 0; i < recursionLevel; i++) {
             const newIndices = [];
-            
+
             for (let j = 0; j < this.indices.length; j += 3) {
                 const a = this.indices[j];
                 const b = this.indices[j+1];
@@ -87,4 +87,64 @@ class IcoSphere {
         }
     }
     
+    applyNoise(strength = 0.1, frequency = 2.0) {
+        const simplex = new SimplexNoise();
+
+        for (let i = 0; i < this.vertices.length; i += 3) {
+            let x = this.vertices[i];
+            let y = this.vertices[i+1];
+            let z = this.vertices[i+2];
+
+            const noiseValue = simplex.noise3D(x * frequency, y * frequency, z * frequency);
+            const deformation = 1.0 + (noiseValue * strength);
+
+            this.vertices[i]     = x * deformation;
+            this.vertices[i + 1] = y * deformation;
+            this.vertices[i + 2] = z * deformation;
+        }
+    }
+
+    toFlatGeometry() {
+        const newVertices = [];
+        
+        for (let i = 0; i < this.indices.length; i++) {
+            const index = this.indices[i];
+            
+            const x = this.vertices[index * 3];
+            const y = this.vertices[index * 3 + 1];
+            const z = this.vertices[index * 3 + 2];
+
+            newVertices.push(x, y, z);
+        }
+
+        this.vertices = newVertices;
+        this.indices = null; 
+    }
+
+    calculateNormals() {
+        this.normals = [];
+
+        for (let i = 0; i < this.vertices.length; i += 9) {
+            const ax = this.vertices[i],   ay = this.vertices[i+1], az = this.vertices[i+2];
+            const bx = this.vertices[i+3], by = this.vertices[i+4], bz = this.vertices[i+5];
+            const cx = this.vertices[i+6], cy = this.vertices[i+7], cz = this.vertices[i+8];
+
+            // Criar dois vetores: v1 (B - A) e v2 (C - A)
+            const v1x = bx - ax, v1y = by - ay, v1z = bz - az;
+            const v2x = cx - ax, v2y = cy - ay, v2z = cz - az;
+
+            // Produto Vetorial de v1 e v2 para achar a perpendicular
+            let nx = v1y * v2z - v1z * v2y;
+            let ny = v1z * v2x - v1x * v2z;
+            let nz = v1x * v2y - v1y * v2x;
+
+            // Normalizar o vetor resultante (fazer o tamanho ser 1)
+            const len = Math.sqrt(nx*nx + ny*ny + nz*nz);
+            nx /= len; ny /= len; nz /= len;
+
+            this.normals.push(nx, ny, nz);
+            this.normals.push(nx, ny, nz);
+            this.normals.push(nx, ny, nz);
+        }
+    }
 }

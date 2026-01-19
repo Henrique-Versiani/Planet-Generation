@@ -5,22 +5,21 @@ canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 gl.viewport(0, 0, canvas.width, canvas.height);
 
+// --- 1. SHADERS ---
 const vsSource = `
     attribute vec3 aPosition;
-    
     uniform mat4 uModel;
     uniform mat4 uView;
     uniform mat4 uProjection;
-
     void main() {
-        // Multiplicação na ordem inversa: Projeção * Câmera * Objeto * Vértice
         gl_Position = uProjection * uView * uModel * vec4(aPosition, 1.0);
     }
 `;
 
+// Mudei a cor para um azul/verde mais sólido para vermos o preenchimento
 const fsSource = `
     void main() {
-        gl_FragColor = vec4(0.0, 1.0, 0.4, 1.0); // Um verde mais "tech"
+        gl_FragColor = vec4(0.2, 0.6, 0.8, 1.0); 
     }
 `;
 
@@ -29,51 +28,47 @@ const fragmentShader = Utils.createShader(gl, gl.FRAGMENT_SHADER, fsSource);
 const program = Utils.createProgram(gl, vertexShader, fragmentShader);
 gl.useProgram(program);
 
-const planet = new IcoSphere();
+
+const planet = new IcoSphere(5);
+planet.applyNoise(0.1, 2);
+planet.toFlatGeometry();
 
 const positionBuffer = gl.createBuffer();
 gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
 gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(planet.vertices), gl.STATIC_DRAW);
 
-const indexBuffer = gl.createBuffer();
-gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(planet.indices), gl.STATIC_DRAW);
-
-// Linkar atributo aPosition
 const aPosition = gl.getAttribLocation(program, 'aPosition');
 gl.enableVertexAttribArray(aPosition);
 gl.vertexAttribPointer(aPosition, 3, gl.FLOAT, false, 0, 0);
 
-// Localizações das uniforms
 const uModelLoc = gl.getUniformLocation(program, 'uModel');
 const uViewLoc = gl.getUniformLocation(program, 'uView');
 const uProjectionLoc = gl.getUniformLocation(program, 'uProjection');
-
-// Criar as matrizes usando gl-matrix
 const modelMatrix = mat4.create();
 const viewMatrix = mat4.create();
 const projectionMatrix = mat4.create();
-
 mat4.lookAt(viewMatrix, [0, 0, 4], [0, 0, 0], [0, 1, 0]);
 mat4.perspective(projectionMatrix, Math.PI / 4, canvas.width / canvas.height, 0.1, 100.0);
-
 gl.uniformMatrix4fv(uViewLoc, false, viewMatrix);
 gl.uniformMatrix4fv(uProjectionLoc, false, projectionMatrix);
 
 let angle = 0;
 
+const vertexCount = planet.vertices.length / 3;
+
 function render() {
     gl.clearColor(0.1, 0.1, 0.1, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.enable(gl.DEPTH_TEST);
+    gl.enable(gl.CULL_FACE); 
 
-    angle += 0.01; // Velocidade de rotação
-    mat4.identity(modelMatrix); // Reseta a matriz
-    mat4.rotateY(modelMatrix, modelMatrix, angle); // Gira no eixo Y
-    mat4.rotateX(modelMatrix, modelMatrix, angle * 0.5); // Gira um pouco no X também
+    angle += 0.005;
+    mat4.identity(modelMatrix);
+    mat4.rotateY(modelMatrix, modelMatrix, angle);
+    mat4.rotateX(modelMatrix, modelMatrix, angle * 0.3);
 
     gl.uniformMatrix4fv(uModelLoc, false, modelMatrix);
-    gl.drawElements(gl.LINES, planet.indices.length, gl.UNSIGNED_SHORT, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, vertexCount);
 
     requestAnimationFrame(render);
 }
