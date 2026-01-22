@@ -8,18 +8,30 @@ gl.viewport(0, 0, canvas.width, canvas.height);
 // --- 1. SHADERS ---
 const vsSource = `
     attribute vec3 aPosition;
+    attribute vec3 aNormal; // <--- Novo atributo: A direção da face
+
     uniform mat4 uModel;
     uniform mat4 uView;
     uniform mat4 uProjection;
+
+    varying vec3 vNormal;   // <--- Vamos passar isso para o Fragment Shader
+
     void main() {
         gl_Position = uProjection * uView * uModel * vec4(aPosition, 1.0);
+        vNormal = mat3(uModel) * aNormal;
     }
 `;
 
-// Mudei a cor para um azul/verde mais sólido para vermos o preenchimento
 const fsSource = `
+    precision mediump float;
+    varying vec3 vNormal; // Recebe a normal
+
     void main() {
-        gl_FragColor = vec4(0.2, 0.6, 0.8, 1.0); 
+        vec3 lightDirection = normalize(vec3(1.0, 1.0, 1.0));
+        vec3 normal = normalize(vNormal);
+        float light = max(dot(normal, lightDirection), 0.1);
+        vec3 baseColor = vec3(0.2, 0.6, 0.8);
+        gl_FragColor = vec4(baseColor * light, 1.0);
     }
 `;
 
@@ -32,6 +44,7 @@ gl.useProgram(program);
 const planet = new IcoSphere(5);
 planet.applyNoise(0.1, 2);
 planet.toFlatGeometry();
+planet.calculateNormals();
 
 const positionBuffer = gl.createBuffer();
 gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
@@ -40,6 +53,14 @@ gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(planet.vertices), gl.STATIC_DRAW
 const aPosition = gl.getAttribLocation(program, 'aPosition');
 gl.enableVertexAttribArray(aPosition);
 gl.vertexAttribPointer(aPosition, 3, gl.FLOAT, false, 0, 0);
+
+const normalBuffer = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(planet.normals), gl.STATIC_DRAW);
+
+const aNormal = gl.getAttribLocation(program, 'aNormal');
+gl.enableVertexAttribArray(aNormal);
+gl.vertexAttribPointer(aNormal, 3, gl.FLOAT, false, 0, 0);
 
 const uModelLoc = gl.getUniformLocation(program, 'uModel');
 const uViewLoc = gl.getUniformLocation(program, 'uView');
