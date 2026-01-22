@@ -5,32 +5,62 @@ canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 gl.viewport(0, 0, canvas.width, canvas.height);
 
-// --- 1. SHADERS ---
 const vsSource = `
     attribute vec3 aPosition;
-    attribute vec3 aNormal; // <--- Novo atributo: A direção da face
+    attribute vec3 aNormal;
 
     uniform mat4 uModel;
     uniform mat4 uView;
     uniform mat4 uProjection;
 
-    varying vec3 vNormal;   // <--- Vamos passar isso para o Fragment Shader
+    varying vec3 vNormal;
+    varying float vHeight;
 
     void main() {
         gl_Position = uProjection * uView * uModel * vec4(aPosition, 1.0);
         vNormal = mat3(uModel) * aNormal;
+        vHeight = length(aPosition);
     }
 `;
 
 const fsSource = `
     precision mediump float;
-    varying vec3 vNormal; // Recebe a normal
+    
+    varying vec3 vNormal;
+    varying float vHeight;
+
+    vec3 colorFromRGB(float r, float g, float b) {
+        return vec3(r / 255.0, g / 255.0, b / 255.0);
+    }
 
     void main() {
+        vec3 baseColor;
+        
+        if (vHeight < 1.0) {
+            // Oceano (Azul escuro)
+            baseColor = colorFromRGB(30.0, 60.0, 160.0);
+        } 
+        else if (vHeight < 1.03) {
+            // Areia / Praia (Amarelo claro)
+            baseColor = colorFromRGB(240.0, 220.0, 150.0);
+        } 
+        else if (vHeight < 1.12) {
+            // Floresta / Terra (Verde)
+            baseColor = colorFromRGB(60.0, 160.0, 60.0);
+        } 
+        else if (vHeight < 1.16) {
+             // Montanha / Rocha (Cinza)
+            baseColor = colorFromRGB(120.0, 120.0, 120.0);
+        }
+        else {
+            // Neve / Topo (Branco)
+            baseColor = colorFromRGB(255.0, 255.0, 255.0);
+        }
+
         vec3 lightDirection = normalize(vec3(1.0, 1.0, 1.0));
         vec3 normal = normalize(vNormal);
-        float light = max(dot(normal, lightDirection), 0.1);
-        vec3 baseColor = vec3(0.2, 0.6, 0.8);
+        float light = max(dot(normal, lightDirection), 0.2);
+
         gl_FragColor = vec4(baseColor * light, 1.0);
     }
 `;
@@ -41,7 +71,7 @@ const program = Utils.createProgram(gl, vertexShader, fragmentShader);
 gl.useProgram(program);
 
 
-const planet = new IcoSphere(5);
+const planet = new IcoSphere(7);
 planet.applyNoise(0.1, 2);
 planet.toFlatGeometry();
 planet.calculateNormals();
