@@ -38,29 +38,25 @@ const fsSource = `
     void main() {
         vec3 baseColor;
         
-        if (vHeight < uWaterLevel) {
-            // Oceano (Azul)
-            baseColor = colorFromRGB(30.0, 60.0, 160.0);
+        if (vHeight <= uWaterLevel + 0.001) {
+            baseColor = colorFromRGB(30.0, 60.0, 160.0); // Oceano
         } 
         else if (vHeight < uWaterLevel + 0.05) {
-            // Areia / Praia (Amarelo)
-            baseColor = colorFromRGB(240.0, 220.0, 150.0);
+            baseColor = colorFromRGB(240.0, 220.0, 150.0); // Areia
         } 
-        else if (vHeight < uWaterLevel + 0.15) {
-            // Floresta / Terra (Verde)
-            baseColor = colorFromRGB(60.0, 160.0, 60.0);
+        else if (vHeight < uWaterLevel + 0.20) {
+            baseColor = colorFromRGB(60.0, 160.0, 60.0); // Floresta
         } 
-        else if (vHeight < uWaterLevel + 0.30) {
-             // Montanha / Rocha (Cinza)
-            baseColor = colorFromRGB(120.0, 120.0, 120.0);
+        else if (vHeight < uWaterLevel + 0.35) {
+             baseColor = colorFromRGB(120.0, 120.0, 120.0); // Rocha
         }
         else {
-            // Neve / Topo (Branco)
-            baseColor = colorFromRGB(255.0, 255.0, 255.0);
+            baseColor = colorFromRGB(255.0, 255.0, 255.0); // Neve
         }
 
         vec3 lightDirection = normalize(vec3(1.0, 1.0, 1.0));
         vec3 normal = normalize(vNormal);
+
         float light = max(dot(normal, lightDirection), 0.2);
 
         gl_FragColor = vec4(baseColor * light, 1.0);
@@ -83,8 +79,8 @@ const positionBuffer = gl.createBuffer();
 const normalBuffer = gl.createBuffer();
 
 const state = {
-    noiseStrength: 0.1,
-    noiseFreq: 2.0,
+    noiseStrength: 0.2,
+    noiseFreq: 1.5,
     waterLevel: 1.0
 };
 
@@ -93,7 +89,8 @@ let vertexCount = 0;
 function updatePlanetGeometry() {
     const planet = new IcoSphere(7); 
     
-    planet.applyNoise(state.noiseStrength, state.noiseFreq);
+    planet.applyNoise(state.noiseStrength, state.noiseFreq, state.waterLevel);
+    
     planet.toFlatGeometry();
     planet.calculateNormals();
 
@@ -133,18 +130,16 @@ function setupUI() {
     if(elWater) {
         elWater.addEventListener('input', (e) => {
             state.waterLevel = parseFloat(e.target.value);
+            updatePlanetGeometry(); 
         });
     }
-
+    
     if(btnRegenerate) {
         btnRegenerate.addEventListener('click', () => {
             updatePlanetGeometry();
         });
     }
 }
-
-updatePlanetGeometry();
-setupUI();
 
 const modelMatrix = mat4.create();
 const viewMatrix = mat4.create();
@@ -161,7 +156,6 @@ let angle = 0;
 function render() {
     gl.clearColor(0.1, 0.1, 0.1, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    
     gl.enable(gl.DEPTH_TEST);
     gl.enable(gl.CULL_FACE);
 
@@ -180,4 +174,8 @@ function render() {
     requestAnimationFrame(render);
 }
 
-render();
+window.onload = function() {
+    setupUI();
+    updatePlanetGeometry();
+    render();
+};
