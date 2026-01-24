@@ -3,6 +3,7 @@ class IcoSphere {
         this.vertices = [];
         this.indices = [];
         this.normals = [];
+        this.colors = [];
         this.indexCache = {};
         
         this.initBaseIcosahedron();
@@ -80,7 +81,7 @@ class IcoSphere {
         }
     }
 
-    applyNoise(strength = 0.1, frequency = 2.0, minLevel = 1.0) {
+    applyNoise(strength, frequency, minLevel) {
         const simplex = new SimplexNoise();
 
         for (let i = 0; i < this.vertices.length; i += 3) {
@@ -89,7 +90,6 @@ class IcoSphere {
             let z = this.vertices[i+2];
 
             const noiseValue = simplex.noise3D(x * frequency, y * frequency, z * frequency);
-
             let deformation = 1.0 + (noiseValue * strength);
 
             if (deformation < minLevel) {
@@ -102,18 +102,57 @@ class IcoSphere {
         }
     }
 
+    generateColors(waterLevel) {
+        this.colors = [];
+        
+        for (let i = 0; i < this.vertices.length; i += 3) {
+            const x = this.vertices[i];
+            const y = this.vertices[i+1];
+            const z = this.vertices[i+2];
+            
+            const height = Math.sqrt(x*x + y*y + z*z);
+
+            let r, g, b;
+
+            if (height <= waterLevel + 0.001) {
+                r=0.12; g=0.24; b=0.63; 
+            } else if (height < waterLevel + 0.05) {
+                r=0.94; g=0.86; b=0.59; 
+            } else if (height < waterLevel + 0.20) {
+                r=0.24; g=0.63; b=0.24; 
+            } else if (height < waterLevel + 0.35) {
+                r=0.47; g=0.47; b=0.47; 
+            } else {
+                r=1.0; g=1.0; b=1.0;    
+            }
+
+            this.colors.push(r, g, b);
+        }
+    }
+
     toFlatGeometry() {
         const newVertices = [];
+        const newColors = [];
+
         for (let i = 0; i < this.indices.length; i++) {
             const index = this.indices[i];
+            
             newVertices.push(
                 this.vertices[index * 3],
                 this.vertices[index * 3 + 1],
                 this.vertices[index * 3 + 2]
             );
+
+            newColors.push(
+                this.colors[index * 3],
+                this.colors[index * 3 + 1],
+                this.colors[index * 3 + 2]
+            );
         }
+        
         this.vertices = newVertices;
-        this.indices = null;
+        this.colors = newColors;
+        this.indices = null; 
     }
 
     calculateNormals() {

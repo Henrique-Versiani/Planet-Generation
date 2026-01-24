@@ -8,18 +8,19 @@ gl.viewport(0, 0, canvas.width, canvas.height);
 const vsSource = `
     attribute vec3 aPosition;
     attribute vec3 aNormal;
+    attribute vec3 aColor;
 
     uniform mat4 uModel;
     uniform mat4 uView;
     uniform mat4 uProjection;
 
     varying vec3 vNormal;
-    varying float vHeight;
+    varying vec3 vColor;
 
     void main() {
         gl_Position = uProjection * uView * uModel * vec4(aPosition, 1.0);
         vNormal = mat3(uModel) * aNormal;
-        vHeight = length(aPosition);
+        vColor = aColor;
     }
 `;
 
@@ -27,39 +28,14 @@ const fsSource = `
     precision mediump float;
     
     varying vec3 vNormal;
-    varying float vHeight;
-
-    uniform float uWaterLevel;
-
-    vec3 colorFromRGB(float r, float g, float b) {
-        return vec3(r / 255.0, g / 255.0, b / 255.0);
-    }
+    varying vec3 vColor;
 
     void main() {
-        vec3 baseColor;
-        
-        if (vHeight <= uWaterLevel + 0.001) {
-            baseColor = colorFromRGB(30.0, 60.0, 160.0); // Oceano
-        } 
-        else if (vHeight < uWaterLevel + 0.05) {
-            baseColor = colorFromRGB(240.0, 220.0, 150.0); // Areia
-        } 
-        else if (vHeight < uWaterLevel + 0.20) {
-            baseColor = colorFromRGB(60.0, 160.0, 60.0); // Floresta
-        } 
-        else if (vHeight < uWaterLevel + 0.35) {
-             baseColor = colorFromRGB(120.0, 120.0, 120.0); // Rocha
-        }
-        else {
-            baseColor = colorFromRGB(255.0, 255.0, 255.0); // Neve
-        }
-
         vec3 lightDirection = normalize(vec3(1.0, 1.0, 1.0));
         vec3 normal = normalize(vNormal);
-
         float light = max(dot(normal, lightDirection), 0.2);
 
-        gl_FragColor = vec4(baseColor * light, 1.0);
+        gl_FragColor = vec4(vColor * light, 1.0);
     }
 `;
 
@@ -71,26 +47,28 @@ gl.useProgram(program);
 const uModelLoc = gl.getUniformLocation(program, 'uModel');
 const uViewLoc = gl.getUniformLocation(program, 'uView');
 const uProjectionLoc = gl.getUniformLocation(program, 'uProjection');
-const uWaterLevelLoc = gl.getUniformLocation(program, 'uWaterLevel');
 const aPosition = gl.getAttribLocation(program, 'aPosition');
 const aNormal = gl.getAttribLocation(program, 'aNormal');
+const aColor = gl.getAttribLocation(program, 'aColor');
 
 const positionBuffer = gl.createBuffer();
 const normalBuffer = gl.createBuffer();
+const colorBuffer = gl.createBuffer();
 
 const state = {
     noiseStrength: 0.2,
     noiseFreq: 1.5,
-    waterLevel: 1.0
+    waterLevel: 1.0,
+    resolution: 4
 };
 
 let vertexCount = 0;
 
 function updatePlanetGeometry() {
-    const planet = new IcoSphere(7); 
+    const planet = new IcoSphere(state.resolution); 
     
     planet.applyNoise(state.noiseStrength, state.noiseFreq, state.waterLevel);
-    
+    planet.generateColors(state.waterLevel); 
     planet.toFlatGeometry();
     planet.calculateNormals();
 
@@ -104,14 +82,27 @@ function updatePlanetGeometry() {
     gl.enableVertexAttribArray(aNormal);
     gl.vertexAttribPointer(aNormal, 3, gl.FLOAT, false, 0, 0);
 
+    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(planet.colors), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(aColor);
+    gl.vertexAttribPointer(aColor, 3, gl.FLOAT, false, 0, 0);
+
     vertexCount = planet.vertices.length / 3;
 }
 
 function setupUI() {
+    const elRes = document.getElementById('resolution');
     const elStrength = document.getElementById('noiseStrength');
     const elFreq = document.getElementById('noiseFreq');
     const elWater = document.getElementById('waterLevel');
     const btnRegenerate = document.getElementById('btnRegenerate');
+
+    if(elRes) {
+        elRes.addEventListener('input', (e) => {
+            state.resolution = parseInt(e.target.value);
+            updatePlanetGeometry(); 
+        });
+    }
 
     if(elStrength) {
         elStrength.addEventListener('input', (e) => {
@@ -165,8 +156,7 @@ function render() {
     mat4.rotateX(modelMatrix, modelMatrix, angle * 0.3);
 
     gl.uniformMatrix4fv(uModelLoc, false, modelMatrix);
-    gl.uniform1f(uWaterLevelLoc, state.waterLevel);
-
+    
     if (vertexCount > 0) {
         gl.drawArrays(gl.TRIANGLES, 0, vertexCount);
     }

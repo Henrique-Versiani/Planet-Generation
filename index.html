@@ -7,7 +7,7 @@
     <style>
         body { 
             margin: 0; 
-            overflow: hidden;
+            overflow: hidden; 
             background: #111; 
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
@@ -90,6 +90,11 @@
         <h3>Controles do Mundo</h3>
         
         <div class="control-group">
+            <label>Resolução</label>
+            <input type="range" id="resolution" min="0" max="7" step="1" value="4">
+        </div>
+
+        <div class="control-group">
             <label>Força do Relevo</label>
             <input type="range" id="noiseStrength" min="0" max="0.8" step="0.01" value="0.2">
         </div>
@@ -106,10 +111,6 @@
         
         <div class="control-group">
             <button id="btnRegenerate">Gerar Nova Semente</button>
-        </div>
-
-        <div style="font-size: 0.8rem; color: #666; text-align: center; margin-top: 10px;">
-            Arraste os sliders para interagir
         </div>
     </div>
 
