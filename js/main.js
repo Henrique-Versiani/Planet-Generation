@@ -26,7 +26,6 @@ const vsSource = `
 
 const fsSource = `
     precision mediump float;
-    
     varying vec3 vNormal;
     varying vec3 vColor;
 
@@ -34,7 +33,6 @@ const fsSource = `
         vec3 lightDirection = normalize(vec3(1.0, 1.0, 1.0));
         vec3 normal = normalize(vNormal);
         float light = max(dot(normal, lightDirection), 0.2);
-
         gl_FragColor = vec4(vColor * light, 1.0);
     }
 `;
@@ -59,17 +57,68 @@ const state = {
     noiseStrength: 0.2,
     noiseFreq: 1.5,
     waterLevel: 1.0,
-    resolution: 4
+    resolution: 4,
+    treeDensity: 10
 };
 
+let currentNoise = new SimplexNoise(); 
+let currentSeed = Math.random() * 1000; 
 let vertexCount = 0;
+
+let isDragging = false;
+let lastMouseX = 0;
+let lastMouseY = 0;
+let rotationX = 0;
+let rotationY = 0;
+let autoRotateSpeed = 0.005;
+
+canvas.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+});
+
+window.addEventListener('mouseup', () => {
+    isDragging = false;
+});
+
+canvas.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    const deltaX = e.clientX - lastMouseX;
+    const deltaY = e.clientY - lastMouseY;
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+    rotationY += deltaX * 0.005;
+    rotationX += deltaY * 0.005;
+});
+
+canvas.addEventListener('touchstart', (e) => {
+    if(e.touches.length === 1) {
+        isDragging = true;
+        lastMouseX = e.touches[0].clientX;
+        lastMouseY = e.touches[0].clientY;
+    }
+});
+
+canvas.addEventListener('touchmove', (e) => {
+    if(!isDragging) return;
+    const deltaX = e.touches[0].clientX - lastMouseX;
+    const deltaY = e.touches[0].clientY - lastMouseY;
+    lastMouseX = e.touches[0].clientX;
+    lastMouseY = e.touches[0].clientY;
+    rotationY += deltaX * 0.005;
+    rotationX += deltaY * 0.005;
+    e.preventDefault();
+});
+
+window.addEventListener('touchend', () => isDragging = false);
 
 function updatePlanetGeometry() {
     const planet = new IcoSphere(state.resolution); 
-    
-    planet.applyNoise(state.noiseStrength, state.noiseFreq, state.waterLevel);
+    planet.applyNoise(state.noiseStrength, state.noiseFreq, state.waterLevel, currentNoise);
     planet.generateColors(state.waterLevel); 
-    planet.toFlatGeometry();
+    planet.toFlatGeometry(); 
+    planet.distributeTrees(state.treeDensity, currentSeed);
     planet.calculateNormals();
 
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
@@ -91,45 +140,30 @@ function updatePlanetGeometry() {
 }
 
 function setupUI() {
-    const elRes = document.getElementById('resolution');
-    const elStrength = document.getElementById('noiseStrength');
-    const elFreq = document.getElementById('noiseFreq');
-    const elWater = document.getElementById('waterLevel');
-    const btnRegenerate = document.getElementById('btnRegenerate');
-
-    if(elRes) {
-        elRes.addEventListener('input', (e) => {
-            state.resolution = parseInt(e.target.value);
-            updatePlanetGeometry(); 
+    const elSpeed = document.getElementById('rotationSpeed');
+    if(elSpeed) {
+        elSpeed.addEventListener('input', (e) => {
+            autoRotateSpeed = parseFloat(e.target.value);
         });
     }
 
-    if(elStrength) {
-        elStrength.addEventListener('input', (e) => {
-            state.noiseStrength = parseFloat(e.target.value);
-            updatePlanetGeometry(); 
-        });
-    }
+    const inputs = ['resolution', 'noiseStrength', 'noiseFreq', 'waterLevel', 'treeDensity'];
+    inputs.forEach(id => {
+        const el = document.getElementById(id);
+        if(el) {
+            el.addEventListener('input', (e) => {
+                if(id === 'resolution' || id === 'treeDensity') state[id] = parseInt(e.target.value);
+                else state[id] = parseFloat(e.target.value);
+                updatePlanetGeometry();
+            });
+        }
+    });
 
-    if(elFreq) {
-        elFreq.addEventListener('input', (e) => {
-            state.noiseFreq = parseFloat(e.target.value);
-            updatePlanetGeometry(); 
-        });
-    }
-
-    if(elWater) {
-        elWater.addEventListener('input', (e) => {
-            state.waterLevel = parseFloat(e.target.value);
-            updatePlanetGeometry(); 
-        });
-    }
-    
-    if(btnRegenerate) {
-        btnRegenerate.addEventListener('click', () => {
-            updatePlanetGeometry();
-        });
-    }
+    document.getElementById('btnRegenerate').addEventListener('click', () => {
+        currentNoise = new SimplexNoise();
+        currentSeed = Math.random() * 1000;
+        updatePlanetGeometry();
+    });
 }
 
 const modelMatrix = mat4.create();
@@ -142,18 +176,19 @@ mat4.perspective(projectionMatrix, Math.PI / 4, canvas.width / canvas.height, 0.
 gl.uniformMatrix4fv(uViewLoc, false, viewMatrix);
 gl.uniformMatrix4fv(uProjectionLoc, false, projectionMatrix);
 
-let angle = 0;
-
 function render() {
     gl.clearColor(0.1, 0.1, 0.1, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.enable(gl.DEPTH_TEST);
     gl.enable(gl.CULL_FACE);
 
-    angle += 0.005;
+    if (!isDragging) {
+        rotationY += autoRotateSpeed;
+    }
+
     mat4.identity(modelMatrix);
-    mat4.rotateY(modelMatrix, modelMatrix, angle);
-    mat4.rotateX(modelMatrix, modelMatrix, angle * 0.3);
+    mat4.rotateX(modelMatrix, modelMatrix, rotationX);
+    mat4.rotateY(modelMatrix, modelMatrix, rotationY);
 
     gl.uniformMatrix4fv(uModelLoc, false, modelMatrix);
     

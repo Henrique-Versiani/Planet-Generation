@@ -21,5 +21,15 @@ const Utils = {
             return null;
         }
         return program;
+    },
+
+    randomFromSeed: function(seed) {
+        var x = Math.sin(seed++) * 10000;
+        return x - Math.floor(x);
+    },
+
+    pseudoRandom3D: function(x, y, z, seed) {
+        const n = x * 12.9898 + y * 78.233 + z * 37.719 + seed;
+        return Utils.randomFromSeed(n);
     }
 };
