@@ -77,7 +77,9 @@ let mouseRotY = 0;
 let planetRotY = 0;
 let autoRotateSpeed = 0.001;
 
-const FIXED_LIGHT_DIR = vec3.fromValues(1.0, 1.0, 1.0);
+let cameraDistance = 4.0;
+
+const FIXED_LIGHT_DIR = [1.0, 1.0, 1.0];
 
 canvas.addEventListener('mousedown', (e) => {
     isDragging = true;
@@ -97,6 +99,14 @@ canvas.addEventListener('mousemove', (e) => {
     mouseRotY += deltaX * 0.005;
     mouseRotX += deltaY * 0.005;
 });
+
+canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+
+    const zoomSpeed = 0.005;
+    cameraDistance += e.deltaY * zoomSpeed;
+    cameraDistance = Math.max(1.8, Math.min(10.0, cameraDistance));
+}, { passive: false });
 
 canvas.addEventListener('touchstart', (e) => {
     if(e.touches.length === 1) {
@@ -177,10 +187,7 @@ const viewMatrix = mat4.create();
 const projectionMatrix = mat4.create();
 const mouseRotMatrix = mat4.create();
 
-mat4.lookAt(viewMatrix, [0, 0, 4], [0, 0, 0], [0, 1, 0]);
 mat4.perspective(projectionMatrix, Math.PI / 4, canvas.width / canvas.height, 0.1, 100.0);
-
-gl.uniformMatrix4fv(uViewLoc, false, viewMatrix);
 gl.uniformMatrix4fv(uProjectionLoc, false, projectionMatrix);
 
 function render() {
@@ -188,6 +195,9 @@ function render() {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.enable(gl.DEPTH_TEST);
     gl.enable(gl.CULL_FACE);
+
+    mat4.lookAt(viewMatrix, [0, 0, cameraDistance], [0, 0, 0], [0, 1, 0]);
+    gl.uniformMatrix4fv(uViewLoc, false, viewMatrix);
 
     if (!isDragging) {
         planetRotY += autoRotateSpeed;
