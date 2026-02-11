@@ -28,11 +28,13 @@ const fsSource = `
     precision mediump float;
     varying vec3 vNormal;
     varying vec3 vColor;
+    
+    uniform vec3 uLightDirection;
 
     void main() {
-        vec3 lightDirection = normalize(vec3(1.0, 1.0, 1.0));
         vec3 normal = normalize(vNormal);
-        float light = max(dot(normal, lightDirection), 0.2);
+        vec3 lightDir = normalize(uLightDirection);
+        float light = max(dot(normal, lightDir), 0.1);
         gl_FragColor = vec4(vColor * light, 1.0);
     }
 `;
@@ -45,6 +47,7 @@ gl.useProgram(program);
 const uModelLoc = gl.getUniformLocation(program, 'uModel');
 const uViewLoc = gl.getUniformLocation(program, 'uView');
 const uProjectionLoc = gl.getUniformLocation(program, 'uProjection');
+const uLightDirLoc = gl.getUniformLocation(program, 'uLightDirection');
 const aPosition = gl.getAttribLocation(program, 'aPosition');
 const aNormal = gl.getAttribLocation(program, 'aNormal');
 const aColor = gl.getAttribLocation(program, 'aColor');
@@ -54,11 +57,11 @@ const normalBuffer = gl.createBuffer();
 const colorBuffer = gl.createBuffer();
 
 const state = {
-    noiseStrength: 0.2,
+    noiseStrength: 0.12,
     noiseFreq: 1.5,
     waterLevel: 1.0,
     resolution: 4,
-    treeDensity: 10
+    treeDensity: 0
 };
 
 let currentNoise = new SimplexNoise(); 
@@ -68,9 +71,13 @@ let vertexCount = 0;
 let isDragging = false;
 let lastMouseX = 0;
 let lastMouseY = 0;
-let rotationX = 0;
-let rotationY = 0;
-let autoRotateSpeed = 0.005;
+
+let mouseRotX = 0;
+let mouseRotY = 0;
+let planetRotY = 0;
+let autoRotateSpeed = 0.001;
+
+const FIXED_LIGHT_DIR = vec3.fromValues(1.0, 1.0, 1.0);
 
 canvas.addEventListener('mousedown', (e) => {
     isDragging = true;
@@ -78,9 +85,7 @@ canvas.addEventListener('mousedown', (e) => {
     lastMouseY = e.clientY;
 });
 
-window.addEventListener('mouseup', () => {
-    isDragging = false;
-});
+window.addEventListener('mouseup', () => { isDragging = false; });
 
 canvas.addEventListener('mousemove', (e) => {
     if (!isDragging) return;
@@ -88,8 +93,9 @@ canvas.addEventListener('mousemove', (e) => {
     const deltaY = e.clientY - lastMouseY;
     lastMouseX = e.clientX;
     lastMouseY = e.clientY;
-    rotationY += deltaX * 0.005;
-    rotationX += deltaY * 0.005;
+    
+    mouseRotY += deltaX * 0.005;
+    mouseRotX += deltaY * 0.005;
 });
 
 canvas.addEventListener('touchstart', (e) => {
@@ -106,8 +112,8 @@ canvas.addEventListener('touchmove', (e) => {
     const deltaY = e.touches[0].clientY - lastMouseY;
     lastMouseX = e.touches[0].clientX;
     lastMouseY = e.touches[0].clientY;
-    rotationY += deltaX * 0.005;
-    rotationX += deltaY * 0.005;
+    mouseRotY += deltaX * 0.005;
+    mouseRotX += deltaY * 0.005;
     e.preventDefault();
 });
 
@@ -169,6 +175,7 @@ function setupUI() {
 const modelMatrix = mat4.create();
 const viewMatrix = mat4.create();
 const projectionMatrix = mat4.create();
+const mouseRotMatrix = mat4.create();
 
 mat4.lookAt(viewMatrix, [0, 0, 4], [0, 0, 0], [0, 1, 0]);
 mat4.perspective(projectionMatrix, Math.PI / 4, canvas.width / canvas.height, 0.1, 100.0);
@@ -183,14 +190,20 @@ function render() {
     gl.enable(gl.CULL_FACE);
 
     if (!isDragging) {
-        rotationY += autoRotateSpeed;
+        planetRotY += autoRotateSpeed;
     }
 
+    mat4.identity(mouseRotMatrix);
+    mat4.rotateX(mouseRotMatrix, mouseRotMatrix, mouseRotX);
+    mat4.rotateY(mouseRotMatrix, mouseRotMatrix, mouseRotY);
     mat4.identity(modelMatrix);
-    mat4.rotateX(modelMatrix, modelMatrix, rotationX);
-    mat4.rotateY(modelMatrix, modelMatrix, rotationY);
-
+    mat4.multiply(modelMatrix, mouseRotMatrix, modelMatrix);
+    mat4.rotateY(modelMatrix, modelMatrix, planetRotY);
     gl.uniformMatrix4fv(uModelLoc, false, modelMatrix);
+    
+    const currentLightDir = vec3.create();
+    vec3.transformMat4(currentLightDir, FIXED_LIGHT_DIR, mouseRotMatrix);
+    gl.uniform3fv(uLightDirLoc, currentLightDir);
     
     if (vertexCount > 0) {
         gl.drawArrays(gl.TRIANGLES, 0, vertexCount);
