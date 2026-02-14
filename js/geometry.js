@@ -94,20 +94,25 @@ class IcoSphere {
     getTreeGeometry(treeSeed) {
         const treeVertices = [];
         const treeColors = [];
-        const w = 0.01, h = 0.08;
+        const w = 0.01; 
+        const h = 0.08; 
+
         const trunkGeo = [ -w,0,-w, w,0,-w, w,0,w, -w,0,w, -w,h,-w, w,h,-w, w,h,w, -w,h,w ];
         const trunkIndices = [0,1,5, 0,5,4, 1,2,6, 1,6,5, 2,3,7, 2,7,6, 3,0,4, 3,4,7];
         for (let idx of trunkIndices) {
             treeVertices.push(trunkGeo[idx*3], trunkGeo[idx*3+1], trunkGeo[idx*3+2]);
             treeColors.push(0.4, 0.3, 0.2);
         }
+
         const foliage = new IcoSphere(0); 
         const leafScale = 0.06;
+        
         const type = Utils.randomFromSeed(treeSeed * 50); 
         let r, g, b;
         if(type < 0.33) { r=0.2; g=0.6; b=0.2; }
         else if(type < 0.66) { r=0.4; g=0.7; b=0.2; }
         else { r=0.8; g=0.5; b=0.1; }
+
         for(let idx of foliage.indices) {
             treeVertices.push(foliage.vertices[idx*3] * leafScale, foliage.vertices[idx*3+1] * leafScale + h, foliage.vertices[idx*3+2] * leafScale);
             treeColors.push(r, g, b);
@@ -143,7 +148,6 @@ class IcoSphere {
                 newColors.push(treeGeom.c[j], treeGeom.c[j+1], treeGeom.c[j+2]);
             }
         }
-        
         this.vertices = newVertices;
         this.colors = newColors;
     }
