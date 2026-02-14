@@ -56,24 +56,50 @@ class IcoSphere {
             let x = this.vertices[i], y = this.vertices[i+1], z = this.vertices[i+2];
             const noiseValue = noiseGenerator.noise3D(x * frequency, y * frequency, z * frequency);
             let deformation = 1.0 + (noiseValue * strength);
+
             if (deformation < minLevel) deformation = minLevel;
+            
             this.vertices[i] = x * deformation;
             this.vertices[i + 1] = y * deformation;
             this.vertices[i + 2] = z * deformation;
         }
     }
 
-    generateColors(waterLevel) {
+    generateColors(waterLevel, noiseGenerator, strength, freq) {
         this.colors = [];
+        const deepWater = [0.01, 0.03, 0.25]; 
+        const shallowWater = [0.2, 0.7, 0.9]; 
+        const maxDepthForGradient = 0.25; 
+
         for (let i = 0; i < this.vertices.length; i += 3) {
             const x = this.vertices[i], y = this.vertices[i+1], z = this.vertices[i+2];
-            const height = Math.sqrt(x*x + y*y + z*z);
+            const currentLen = Math.sqrt(x*x + y*y + z*z);
+            const nx = x / currentLen;
+            const ny = y / currentLen;
+            const nz = z / currentLen;
+
             let r, g, b;
-            if (height <= waterLevel + 0.001) { r=0.12; g=0.24; b=0.63; }
-            else if (height < waterLevel + 0.05) { r=0.94; g=0.86; b=0.59; }
-            else if (height < waterLevel + 0.20) { r=0.24; g=0.63; b=0.24; }
-            else if (height < waterLevel + 0.35) { r=0.47; g=0.47; b=0.47; }
-            else { r=1.0; g=1.0; b=1.0; }
+
+            if (currentLen <= waterLevel + 0.001) {
+                const noiseVal = noiseGenerator.noise3D(nx * freq, ny * freq, nz * freq);
+                const theoreticalHeight = 1.0 + (noiseVal * strength);
+                const depth = waterLevel - theoreticalHeight;
+                
+                let depthFactor = depth / maxDepthForGradient;
+                depthFactor = Math.max(0.0, Math.min(1.0, depthFactor));
+
+                r = shallowWater[0] * (1.0 - depthFactor) + deepWater[0] * depthFactor;
+                g = shallowWater[1] * (1.0 - depthFactor) + deepWater[1] * depthFactor;
+                b = shallowWater[2] * (1.0 - depthFactor) + deepWater[2] * depthFactor;
+            } else {
+                const altitude = currentLen - waterLevel;
+                if (altitude < 0.02) { r=0.94; g=0.86; b=0.59; }
+                else if (altitude < 0.05) { r=0.33; g=0.73; b=0.22; }
+                else if (altitude < 0.1) { r=0.18; g=0.53; b=0.18; }
+                else if (altitude < 0.15) { r=0.55; g=0.48; b=0.42; }
+                else if (altitude < 0.20) { r=0.45; g=0.45; b=0.48; }
+                else { r=0.96; g=0.96; b=1.0; }
+            }
             this.colors.push(r, g, b);
         }
     }
@@ -94,25 +120,18 @@ class IcoSphere {
     getTreeGeometry(treeSeed) {
         const treeVertices = [];
         const treeColors = [];
-        const w = 0.01; 
-        const h = 0.08; 
-
+        const w = 0.007; const h = 0.06; 
         const trunkGeo = [ -w,0,-w, w,0,-w, w,0,w, -w,0,w, -w,h,-w, w,h,-w, w,h,w, -w,h,w ];
         const trunkIndices = [0,1,5, 0,5,4, 1,2,6, 1,6,5, 2,3,7, 2,7,6, 3,0,4, 3,4,7];
         for (let idx of trunkIndices) {
             treeVertices.push(trunkGeo[idx*3], trunkGeo[idx*3+1], trunkGeo[idx*3+2]);
             treeColors.push(0.4, 0.3, 0.2);
         }
-
         const foliage = new IcoSphere(0); 
-        const leafScale = 0.06;
-        
+        const leafScale = 0.04;
         const type = Utils.randomFromSeed(treeSeed * 50); 
         let r, g, b;
-        if(type < 0.33) { r=0.2; g=0.6; b=0.2; }
-        else if(type < 0.66) { r=0.4; g=0.7; b=0.2; }
-        else { r=0.8; g=0.5; b=0.1; }
-
+        if(type < 0.33) { r=0.2; g=0.6; b=0.2; } else if(type < 0.66) { r=0.4; g=0.7; b=0.2; } else { r=0.8; g=0.5; b=0.1; }
         for(let idx of foliage.indices) {
             treeVertices.push(foliage.vertices[idx*3] * leafScale, foliage.vertices[idx*3+1] * leafScale + h, foliage.vertices[idx*3+2] * leafScale);
             treeColors.push(r, g, b);
@@ -123,24 +142,17 @@ class IcoSphere {
     distributeTrees(plantedPositions) {
         const newVertices = [...this.vertices];
         const newColors = [...this.colors];
-
-        const mat = mat4.create();
-        const q = quat.create();
-        const up = vec3.fromValues(0, 1, 0);
-        const pos = vec3.create();
-        const norm = vec3.create();
-        const treePos = vec3.create();
+        const mat = mat4.create(); const q = quat.create(); const up = vec3.fromValues(0, 1, 0);
+        const pos = vec3.create(); const norm = vec3.create(); const treePos = vec3.create();
 
         for (let i = 0; i < plantedPositions.length; i++) {
             const p = plantedPositions[i];
             const seed = p.x + p.y + p.z;
             const treeGeom = this.getTreeGeometry(seed);
-
             vec3.set(pos, p.x, p.y, p.z);
             vec3.normalize(norm, pos);
             quat.rotationTo(q, up, norm);
             mat4.fromRotationTranslation(mat, q, pos);
-
             for (let j = 0; j < treeGeom.v.length; j+=3) {
                 vec3.set(treePos, treeGeom.v[j], treeGeom.v[j+1], treeGeom.v[j+2]);
                 vec3.transformMat4(treePos, treePos, mat);

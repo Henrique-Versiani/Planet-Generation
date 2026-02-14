@@ -91,7 +91,7 @@ const cloudPositionBuffer = gl.createBuffer();
 const cloudNormalBuffer = gl.createBuffer();
 const cloudColorBuffer = gl.createBuffer();
 
-const state = { noiseStrength: 0.2, noiseFreq: 1.5, waterLevel: 1.0, resolution: 4 };
+const state = { noiseStrength: 0.12, noiseFreq: 1.5, waterLevel: 1.0, resolution: 5, deepWaterThreshold: 0.15 };
 let plantedTrees = []; 
 let currentPlanetGeometry = null;
 let currentNoise = new SimplexNoise(); 
@@ -108,7 +108,7 @@ let planetRotY = 0;
 let cloudRotY = 0;
 let autoRotateSpeed = 0.001;
 let sunAngle = 1.0;
-let cameraDistance = 4.0;
+let cameraDistance = 6.0;
 
 const modelMatrix = mat4.create();
 const cloudModelMatrix = mat4.create(); 
@@ -171,8 +171,7 @@ function castRay(mouseX, mouseY) {
 
     let closestDist = Infinity; let hitPoint = null; let hitColor = null;
     const verts = currentPlanetGeometry.vertices; const colors = currentPlanetGeometry.colors;
-    
-    const limit = Math.min(verts.length, 60000); 
+    const limit = verts.length; 
 
     for (let i = 0; i < limit; i += 9) {
         const v0 = vec3.fromValues(verts[i], verts[i+1], verts[i+2]);
@@ -219,11 +218,9 @@ canvas.addEventListener('wheel', e => {
 function updatePlanetGeometry() {
     const planet = new IcoSphere(state.resolution); 
     planet.applyNoise(state.noiseStrength, state.noiseFreq, state.waterLevel, currentNoise);
-    planet.generateColors(state.waterLevel); 
+    planet.generateColors(state.waterLevel, currentNoise, state.noiseStrength, state.noiseFreq, state.deepWaterThreshold);
     planet.toFlatGeometry(); 
-    
     planet.distributeTrees(plantedTrees);
-    
     planet.calculateNormals();
     currentPlanetGeometry = planet; 
 
@@ -301,6 +298,12 @@ async function generateClouds() {
 function setupUI() {
     const elSpeed = document.getElementById('rotationSpeed'); if(elSpeed) elSpeed.addEventListener('input', e => autoRotateSpeed = parseFloat(e.target.value));
     const elSun = document.getElementById('sunPosition'); if(elSun) elSun.addEventListener('input', e => sunAngle = parseFloat(e.target.value));
+    const elDeep = document.getElementById('deepWaterThreshold'); 
+    if(elDeep) elDeep.addEventListener('input', e => {
+        state.deepWaterThreshold = parseFloat(e.target.value);
+        updatePlanetGeometry();
+    });
+
     ['resolution', 'noiseStrength', 'noiseFreq', 'waterLevel'].forEach(id => {
         document.getElementById(id)?.addEventListener('input', e => {
             state[id] = (id==='resolution') ? parseInt(e.target.value) : parseFloat(e.target.value);
