@@ -91,7 +91,15 @@ const cloudPositionBuffer = gl.createBuffer();
 const cloudNormalBuffer = gl.createBuffer();
 const cloudColorBuffer = gl.createBuffer();
 
-const state = { noiseStrength: 0.12, noiseFreq: 1.5, waterLevel: 1.0, resolution: 5, deepWaterThreshold: 0.15 };
+const state = { 
+    noiseStrength: 0.12, 
+    noiseFreq: 1.5, 
+    waterLevel: 1.0, 
+    resolution: 5, 
+    deepWaterThreshold: 0.15,
+    palette: {}
+};
+
 let plantedTrees = []; 
 let currentPlanetGeometry = null;
 let currentNoise = new SimplexNoise(); 
@@ -171,6 +179,7 @@ function castRay(mouseX, mouseY) {
 
     let closestDist = Infinity; let hitPoint = null; let hitColor = null;
     const verts = currentPlanetGeometry.vertices; const colors = currentPlanetGeometry.colors;
+    
     const limit = verts.length; 
 
     for (let i = 0; i < limit; i += 9) {
@@ -191,10 +200,8 @@ function castRay(mouseX, mouseY) {
     }
 
     if (hitPoint) {
-        if (hitColor.g > hitColor.r && hitColor.g > hitColor.b) {
-            plantedTrees.push({ x: hitPoint[0], y: hitPoint[1], z: hitPoint[2] });
-            updatePlanetGeometry(); 
-        }
+        plantedTrees.push({ x: hitPoint[0], y: hitPoint[1], z: hitPoint[2] });
+        updatePlanetGeometry(); 
     }
 }
 
@@ -218,9 +225,12 @@ canvas.addEventListener('wheel', e => {
 function updatePlanetGeometry() {
     const planet = new IcoSphere(state.resolution); 
     planet.applyNoise(state.noiseStrength, state.noiseFreq, state.waterLevel, currentNoise);
-    planet.generateColors(state.waterLevel, currentNoise, state.noiseStrength, state.noiseFreq, state.deepWaterThreshold);
+
+    planet.generateColors(state.waterLevel, currentNoise, state.noiseStrength, state.noiseFreq, state.deepWaterThreshold, state.palette);
+    
     planet.toFlatGeometry(); 
-    planet.distributeTrees(plantedTrees);
+    planet.distributeTrees(plantedTrees, state.waterLevel, currentNoise, state.noiseStrength, state.noiseFreq);
+    
     planet.calculateNormals();
     currentPlanetGeometry = planet; 
 
@@ -310,6 +320,24 @@ function setupUI() {
             updatePlanetGeometry();
         });
     });
+
+    const colors = ['colDeep', 'colShallow', 'colSand', 'colGrass', 'colForest', 'colRock', 'colSnow'];
+    const keys = ['deepWater', 'shallowWater', 'sand', 'grass', 'forest', 'rock', 'snow'];
+
+    const updatePalette = () => {
+        colors.forEach((id, index) => {
+            const hex = document.getElementById(id).value;
+            state.palette[keys[index]] = Utils.hexToRgb(hex);
+        });
+        updatePlanetGeometry();
+    };
+
+    colors.forEach(id => {
+        document.getElementById(id).addEventListener('input', updatePalette);
+    });
+
+    updatePalette();
+
     document.getElementById('btnRegenerate')?.addEventListener('click', () => {
         currentNoise = new SimplexNoise(); currentSeed = Math.random() * 1000;
         plantedTrees = []; updatePlanetGeometry(); generateClouds(); 

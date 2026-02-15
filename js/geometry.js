@@ -56,27 +56,23 @@ class IcoSphere {
             let x = this.vertices[i], y = this.vertices[i+1], z = this.vertices[i+2];
             const noiseValue = noiseGenerator.noise3D(x * frequency, y * frequency, z * frequency);
             let deformation = 1.0 + (noiseValue * strength);
-
             if (deformation < minLevel) deformation = minLevel;
-            
             this.vertices[i] = x * deformation;
             this.vertices[i + 1] = y * deformation;
             this.vertices[i + 2] = z * deformation;
         }
     }
 
-    generateColors(waterLevel, noiseGenerator, strength, freq) {
+    generateColors(waterLevel, noiseGenerator, strength, freq, maxDepth, palette) {
         this.colors = [];
-        const deepWater = [0.01, 0.03, 0.25]; 
-        const shallowWater = [0.2, 0.7, 0.9]; 
-        const maxDepthForGradient = 0.25; 
+
+        const deepWater = palette.deepWater;
+        const shallowWater = palette.shallowWater;
 
         for (let i = 0; i < this.vertices.length; i += 3) {
             const x = this.vertices[i], y = this.vertices[i+1], z = this.vertices[i+2];
             const currentLen = Math.sqrt(x*x + y*y + z*z);
-            const nx = x / currentLen;
-            const ny = y / currentLen;
-            const nz = z / currentLen;
+            const nx = x / currentLen; const ny = y / currentLen; const nz = z / currentLen;
 
             let r, g, b;
 
@@ -84,8 +80,7 @@ class IcoSphere {
                 const noiseVal = noiseGenerator.noise3D(nx * freq, ny * freq, nz * freq);
                 const theoreticalHeight = 1.0 + (noiseVal * strength);
                 const depth = waterLevel - theoreticalHeight;
-                
-                let depthFactor = depth / maxDepthForGradient;
+                let depthFactor = depth / maxDepth;
                 depthFactor = Math.max(0.0, Math.min(1.0, depthFactor));
 
                 r = shallowWater[0] * (1.0 - depthFactor) + deepWater[0] * depthFactor;
@@ -93,12 +88,15 @@ class IcoSphere {
                 b = shallowWater[2] * (1.0 - depthFactor) + deepWater[2] * depthFactor;
             } else {
                 const altitude = currentLen - waterLevel;
-                if (altitude < 0.02) { r=0.94; g=0.86; b=0.59; }
-                else if (altitude < 0.05) { r=0.33; g=0.73; b=0.22; }
-                else if (altitude < 0.1) { r=0.18; g=0.53; b=0.18; }
-                else if (altitude < 0.15) { r=0.55; g=0.48; b=0.42; }
-                else if (altitude < 0.20) { r=0.45; g=0.45; b=0.48; }
-                else { r=0.96; g=0.96; b=1.0; }
+                let col;
+                if (altitude < 0.02) col = palette.sand;
+                else if (altitude < 0.05) col = palette.grass;
+                else if (altitude < 0.1) col = palette.forest;
+                else if (altitude < 0.15) col = palette.rock;
+                else if (altitude < 0.20) col = palette.rock;
+                else col = palette.snow;
+
+                r = col[0]; g = col[1]; b = col[2];
             }
             this.colors.push(r, g, b);
         }
@@ -139,7 +137,7 @@ class IcoSphere {
         return { v: treeVertices, c: treeColors };
     }
 
-    distributeTrees(plantedPositions) {
+    distributeTrees(plantedPositions, waterLevel, noiseGenerator, strength, freq) {
         const newVertices = [...this.vertices];
         const newColors = [...this.colors];
         const mat = mat4.create(); const q = quat.create(); const up = vec3.fromValues(0, 1, 0);
@@ -148,11 +146,23 @@ class IcoSphere {
         for (let i = 0; i < plantedPositions.length; i++) {
             const p = plantedPositions[i];
             const seed = p.x + p.y + p.z;
+            
+            vec3.set(norm, p.x, p.y, p.z);
+            vec3.normalize(norm, norm);
+
+            const noiseVal = noiseGenerator.noise3D(norm[0] * freq, norm[1] * freq, norm[2] * freq);
+            let height = 1.0 + (noiseVal * strength);
+            
+            if (height <= waterLevel) continue; 
+            const altitude = height - waterLevel;
+            if (altitude < 0.02 || altitude > 0.35) continue;
+
+            vec3.scale(pos, norm, height);
+
             const treeGeom = this.getTreeGeometry(seed);
-            vec3.set(pos, p.x, p.y, p.z);
-            vec3.normalize(norm, pos);
             quat.rotationTo(q, up, norm);
             mat4.fromRotationTranslation(mat, q, pos);
+
             for (let j = 0; j < treeGeom.v.length; j+=3) {
                 vec3.set(treePos, treeGeom.v[j], treeGeom.v[j+1], treeGeom.v[j+2]);
                 vec3.transformMat4(treePos, treePos, mat);
