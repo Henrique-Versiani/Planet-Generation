@@ -92,18 +92,28 @@ const cloudNormalBuffer = gl.createBuffer();
 const cloudColorBuffer = gl.createBuffer();
 
 const state = { 
-    noiseStrength: 0.12, 
+    noiseStrength: 0.1, 
     noiseFreq: 1.5, 
     waterLevel: 1.0, 
     resolution: 5, 
     deepWaterThreshold: 0.15,
-    palette: {}
+    palette: {
+        deepWater: [0.01, 0.03, 0.25],
+        shallowWater: [0.2, 0.7, 0.9],
+        sand: [0.94, 0.86, 0.59],
+        grass: [0.33, 0.73, 0.22],
+        forest: [0.18, 0.53, 0.18],
+        rock: [0.55, 0.48, 0.42],
+        snow: [0.96, 0.96, 1.0]
+    } 
 };
+
+let currentSeedString = "Planeta" + Math.floor(Math.random() * 1000);
+let numericSeed = 0; 
 
 let plantedTrees = []; 
 let currentPlanetGeometry = null;
-let currentNoise = new SimplexNoise(); 
-let currentSeed = Math.random() * 1000;
+let currentNoise = null; 
 let vertexCount = 0;
 let cloudVertexCount = 0;
 let loadedCloudModel = null;
@@ -179,7 +189,6 @@ function castRay(mouseX, mouseY) {
 
     let closestDist = Infinity; let hitPoint = null; let hitColor = null;
     const verts = currentPlanetGeometry.vertices; const colors = currentPlanetGeometry.colors;
-    
     const limit = verts.length; 
 
     for (let i = 0; i < limit; i += 9) {
@@ -200,8 +209,10 @@ function castRay(mouseX, mouseY) {
     }
 
     if (hitPoint) {
-        plantedTrees.push({ x: hitPoint[0], y: hitPoint[1], z: hitPoint[2] });
-        updatePlanetGeometry(); 
+        if (hitColor.g > hitColor.r && hitColor.g > hitColor.b) {
+            plantedTrees.push({ x: hitPoint[0], y: hitPoint[1], z: hitPoint[2] });
+            updatePlanetGeometry(); 
+        }
     }
 }
 
@@ -222,12 +233,24 @@ canvas.addEventListener('wheel', e => {
     cameraDistance = Math.max(1.8, Math.min(10.0, cameraDistance + e.deltaY * 0.005));
 }, {passive: false});
 
+function initializeSeed(seedStr, clearTrees = true) {
+    currentSeedString = seedStr;
+    const elSeed = document.getElementById('seedInput');
+    if (elSeed) elSeed.value = currentSeedString;
+    
+    numericSeed = Utils.stringToHash(currentSeedString);
+    const seededRandom = Utils.createSeededRandom(numericSeed);
+    currentNoise = new SimplexNoise(seededRandom);
+    
+    if(clearTrees) plantedTrees = []; 
+}
+
 function updatePlanetGeometry() {
+    if (!currentNoise) return;
+
     const planet = new IcoSphere(state.resolution); 
     planet.applyNoise(state.noiseStrength, state.noiseFreq, state.waterLevel, currentNoise);
-
     planet.generateColors(state.waterLevel, currentNoise, state.noiseStrength, state.noiseFreq, state.deepWaterThreshold, state.palette);
-    
     planet.toFlatGeometry(); 
     planet.distributeTrees(plantedTrees, state.waterLevel, currentNoise, state.noiseStrength, state.noiseFreq);
     
@@ -238,6 +261,110 @@ function updatePlanetGeometry() {
     gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(planet.normals), gl.STATIC_DRAW);
     gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(planet.colors), gl.STATIC_DRAW);
     vertexCount = planet.vertices.length / 3;
+}
+
+function updateUIFromState() {
+    const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if(el) el.value = val;
+    };
+    setVal('noiseStrength', state.noiseStrength);
+    setVal('noiseFreq', state.noiseFreq);
+    setVal('waterLevel', state.waterLevel);
+    setVal('resolution', state.resolution);
+    setVal('deepWaterThreshold', state.deepWaterThreshold);
+
+    const colors = ['colDeep', 'colShallow', 'colSand', 'colGrass', 'colForest', 'colRock', 'colSnow'];
+    const keys = ['deepWater', 'shallowWater', 'sand', 'grass', 'forest', 'rock', 'snow'];
+    
+    colors.forEach((id, index) => {
+        const el = document.getElementById(id);
+        const rgb = state.palette[keys[index]];
+        if (el && rgb) {
+            el.value = Utils.rgbToHex(rgb[0], rgb[1], rgb[2]);
+        }
+    });
+}
+
+function setupUI() {
+    const bindSlider = (id, key, isInt = false) => {
+        document.getElementById(id)?.addEventListener('input', e => {
+            state[key] = isInt ? parseInt(e.target.value) : parseFloat(e.target.value);
+            updatePlanetGeometry();
+        });
+    };
+    bindSlider('noiseStrength', 'noiseStrength');
+    bindSlider('noiseFreq', 'noiseFreq');
+    bindSlider('waterLevel', 'waterLevel');
+    bindSlider('deepWaterThreshold', 'deepWaterThreshold');
+    bindSlider('resolution', 'resolution', true);
+
+    const elSun = document.getElementById('sunPosition'); 
+    if(elSun) elSun.addEventListener('input', e => sunAngle = parseFloat(e.target.value));
+    
+    const elSpeed = document.getElementById('rotationSpeed'); 
+    if(elSpeed) elSpeed.addEventListener('input', e => autoRotateSpeed = parseFloat(e.target.value));
+
+    const colors = ['colDeep', 'colShallow', 'colSand', 'colGrass', 'colForest', 'colRock', 'colSnow'];
+    const keys = ['deepWater', 'shallowWater', 'sand', 'grass', 'forest', 'rock', 'snow'];
+
+    const updatePaletteFromUI = () => {
+        colors.forEach((id, index) => {
+            const el = document.getElementById(id);
+            if (el) state.palette[keys[index]] = Utils.hexToRgb(el.value);
+        });
+        updatePlanetGeometry();
+    };
+
+    colors.forEach(id => {
+        document.getElementById(id)?.addEventListener('input', updatePaletteFromUI);
+    });
+
+    // Botões
+    document.getElementById('btnRegenerate')?.addEventListener('click', () => {
+        const newSeed = "Seed-" + Math.floor(Math.random() * 10000);
+        initializeSeed(newSeed);
+        updatePlanetGeometry(); 
+        generateClouds();
+    });
+
+    document.getElementById('btnLoadSeed')?.addEventListener('click', () => {
+        const inputVal = document.getElementById('seedInput').value;
+        if(inputVal.trim() !== "") {
+            loadFromCode(inputVal);
+        }
+    });
+
+    document.getElementById('btnCopySeed')?.addEventListener('click', () => {
+        const fullCode = serializeWorld();
+        const elInput = document.getElementById("seedInput");
+        elInput.value = fullCode;
+        elInput.select();
+        navigator.clipboard.writeText(fullCode).then(() => alert("Código copiado!"));
+    });
+}
+
+// --- SAVE / LOAD ---
+function serializeWorld() {
+    const saveData = { seed: currentSeedString, config: state };
+    return btoa(JSON.stringify(saveData));
+}
+
+function loadFromCode(code) {
+    try {
+        const jsonStr = atob(code);
+        const savedData = JSON.parse(jsonStr);
+        Object.assign(state, savedData.config);
+        initializeSeed(savedData.seed, false);
+        updateUIFromState();
+        updatePlanetGeometry();
+        generateClouds();
+    } catch (e) {
+        console.log("Código inválido, usando como seed de texto.");
+        initializeSeed(code, true);
+        updatePlanetGeometry();
+        generateClouds();
+    }
 }
 
 async function generateClouds() {
@@ -256,7 +383,6 @@ async function generateClouds() {
             }; 
         }
     }
-
     const finalVertices = []; const finalNormals = []; const finalColors = [];
     const numClouds = 15; 
     const altitude = 1.35;
@@ -264,7 +390,7 @@ async function generateClouds() {
     const clusterPos = vec3.create(); const tempVec = vec3.create();
 
     for (let i = 0; i < numClouds; i++) {
-        const seed = currentSeed + i * 55;
+        const seed = numericSeed + i * 55;
         const s1 = Utils.randomFromSeed(seed);
         const s2 = Utils.randomFromSeed(seed + 1);
         const theta = s1 * Math.PI * 2;
@@ -274,28 +400,22 @@ async function generateClouds() {
         const z = Math.cos(phi);
         vec3.set(clusterPos, x, y, z);
         vec3.scale(clusterPos, clusterPos, altitude);
-
         const norm = vec3.clone(clusterPos);
         vec3.normalize(norm, norm);
         quat.rotationTo(q, up, norm);
-        
         const scale = 0.01 + Utils.randomFromSeed(seed + 2) * 0.015; 
-        
         const randomYRot = Utils.randomFromSeed(seed + 3) * Math.PI * 2;
         quat.rotateY(q, q, randomYRot);
         mat4.fromRotationTranslationScale(mat, q, clusterPos, [scale, scale, scale]);
-
         for (let j = 0; j < loadedCloudModel.vertices.length; j += 3) {
             vec3.set(tempVec, loadedCloudModel.vertices[j], loadedCloudModel.vertices[j+1], loadedCloudModel.vertices[j+2]);
             vec3.transformMat4(tempVec, tempVec, mat);
             finalVertices.push(tempVec[0], tempVec[1], tempVec[2]);
-            
             vec3.set(tempVec, loadedCloudModel.normals[j], loadedCloudModel.normals[j+1], loadedCloudModel.normals[j+2]);
             const normMat = mat3.create(); mat3.fromMat4(normMat, mat);
             vec3.transformMat3(tempVec, tempVec, normMat);
             vec3.normalize(tempVec, tempVec);
             finalNormals.push(tempVec[0], tempVec[1], tempVec[2]);
-            
             finalColors.push(1.0, 1.0, 1.0);
         }
     }
@@ -305,87 +425,39 @@ async function generateClouds() {
     cloudVertexCount = finalVertices.length / 3;
 }
 
-function setupUI() {
-    const elSpeed = document.getElementById('rotationSpeed'); if(elSpeed) elSpeed.addEventListener('input', e => autoRotateSpeed = parseFloat(e.target.value));
-    const elSun = document.getElementById('sunPosition'); if(elSun) elSun.addEventListener('input', e => sunAngle = parseFloat(e.target.value));
-    const elDeep = document.getElementById('deepWaterThreshold'); 
-    if(elDeep) elDeep.addEventListener('input', e => {
-        state.deepWaterThreshold = parseFloat(e.target.value);
-        updatePlanetGeometry();
-    });
-
-    ['resolution', 'noiseStrength', 'noiseFreq', 'waterLevel'].forEach(id => {
-        document.getElementById(id)?.addEventListener('input', e => {
-            state[id] = (id==='resolution') ? parseInt(e.target.value) : parseFloat(e.target.value);
-            updatePlanetGeometry();
-        });
-    });
-
-    const colors = ['colDeep', 'colShallow', 'colSand', 'colGrass', 'colForest', 'colRock', 'colSnow'];
-    const keys = ['deepWater', 'shallowWater', 'sand', 'grass', 'forest', 'rock', 'snow'];
-
-    const updatePalette = () => {
-        colors.forEach((id, index) => {
-            const hex = document.getElementById(id).value;
-            state.palette[keys[index]] = Utils.hexToRgb(hex);
-        });
-        updatePlanetGeometry();
-    };
-
-    colors.forEach(id => {
-        document.getElementById(id).addEventListener('input', updatePalette);
-    });
-
-    updatePalette();
-
-    document.getElementById('btnRegenerate')?.addEventListener('click', () => {
-        currentNoise = new SimplexNoise(); currentSeed = Math.random() * 1000;
-        plantedTrees = []; updatePlanetGeometry(); generateClouds(); 
-    });
-}
-
 function render() {
     if (!isDragging) planetRotY += autoRotateSpeed;
     cloudRotY += autoRotateSpeed * 1.5; 
-
     mat4.identity(mouseRotMatrix);
     mat4.rotateX(mouseRotMatrix, mouseRotMatrix, mouseRotX);
     mat4.rotateY(mouseRotMatrix, mouseRotMatrix, mouseRotY);
-
     mat4.identity(modelMatrix);
     mat4.multiply(modelMatrix, mouseRotMatrix, modelMatrix);
     mat4.rotateY(modelMatrix, modelMatrix, planetRotY);
-
     mat4.identity(cloudModelMatrix);
     mat4.multiply(cloudModelMatrix, mouseRotMatrix, cloudModelMatrix);
     mat4.rotateY(cloudModelMatrix, cloudModelMatrix, cloudRotY);
-
     const sunX = Math.sin(sunAngle); const sunZ = Math.cos(sunAngle);
     const baseLightPos = vec3.fromValues(sunX * 20.0, 10.0, sunZ * 20.0);
     const lightPos = vec3.create(); vec3.transformMat4(lightPos, baseLightPos, mouseRotMatrix);
     mat4.lookAt(lightViewMatrix, lightPos, [0,0,0], [0,1,0]);
     mat4.multiply(lightSpaceMatrix, lightProjectionMatrix, lightViewMatrix);
-
     gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFramebuffer);
     gl.viewport(0, 0, shadowTextureSize, shadowTextureSize);
     gl.clear(gl.DEPTH_BUFFER_BIT);
     gl.useProgram(shadowProgram);
     gl.uniformMatrix4fv(gl.getUniformLocation(shadowProgram, 'uLightMatrix'), false, lightSpaceMatrix);
     gl.disable(gl.CULL_FACE); 
-
     const sPos = gl.getAttribLocation(shadowProgram, 'aPosition');
     gl.enableVertexAttribArray(sPos);
-
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
     gl.vertexAttribPointer(sPos, 3, gl.FLOAT, false, 0, 0);
     gl.uniformMatrix4fv(gl.getUniformLocation(shadowProgram, 'uModel'), false, modelMatrix);
     if (vertexCount > 0) gl.drawArrays(gl.TRIANGLES, 0, vertexCount);
-
     gl.bindBuffer(gl.ARRAY_BUFFER, cloudPositionBuffer);
     gl.vertexAttribPointer(sPos, 3, gl.FLOAT, false, 0, 0);
     gl.uniformMatrix4fv(gl.getUniformLocation(shadowProgram, 'uModel'), false, cloudModelMatrix);
     if (cloudVertexCount > 0) gl.drawArrays(gl.TRIANGLES, 0, cloudVertexCount);
-
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.clearColor(0.1, 0.1, 0.1, 1.0);
@@ -394,7 +466,6 @@ function render() {
     gl.enable(gl.CULL_FACE);
     gl.cullFace(gl.BACK);
     gl.useProgram(mainProgram);
-
     mat4.perspective(projectionMatrix, Math.PI / 4, canvas.width / canvas.height, 0.1, 100.0);
     mat4.lookAt(viewMatrix, [0, 0, cameraDistance], [0, 0, 0], [0, 1, 0]);
     gl.uniformMatrix4fv(gl.getUniformLocation(mainProgram, 'uProjection'), false, projectionMatrix);
@@ -404,30 +475,28 @@ function render() {
     gl.uniform3fv(gl.getUniformLocation(mainProgram, 'uLightDirection'), lightDirVec);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, shadowDepthTexture);
     gl.uniform1i(gl.getUniformLocation(mainProgram, 'uShadowMap'), 0);
-
     const mPos = gl.getAttribLocation(mainProgram, 'aPosition'); gl.enableVertexAttribArray(mPos);
     const mNorm = gl.getAttribLocation(mainProgram, 'aNormal'); gl.enableVertexAttribArray(mNorm);
     const mCol = gl.getAttribLocation(mainProgram, 'aColor'); gl.enableVertexAttribArray(mCol);
     const uReceiveShadowsLoc = gl.getUniformLocation(mainProgram, 'uReceiveShadows');
-
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer); gl.vertexAttribPointer(mPos, 3, gl.FLOAT, false, 0, 0);
     gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer); gl.vertexAttribPointer(mNorm, 3, gl.FLOAT, false, 0, 0);
     gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer); gl.vertexAttribPointer(mCol, 3, gl.FLOAT, false, 0, 0);
     gl.uniformMatrix4fv(gl.getUniformLocation(mainProgram, 'uModel'), false, modelMatrix);
     gl.uniform1i(uReceiveShadowsLoc, 1); 
     if (vertexCount > 0) gl.drawArrays(gl.TRIANGLES, 0, vertexCount);
-
     gl.bindBuffer(gl.ARRAY_BUFFER, cloudPositionBuffer); gl.vertexAttribPointer(mPos, 3, gl.FLOAT, false, 0, 0);
     gl.bindBuffer(gl.ARRAY_BUFFER, cloudNormalBuffer); gl.vertexAttribPointer(mNorm, 3, gl.FLOAT, false, 0, 0);
     gl.bindBuffer(gl.ARRAY_BUFFER, cloudColorBuffer); gl.vertexAttribPointer(mCol, 3, gl.FLOAT, false, 0, 0);
     gl.uniformMatrix4fv(gl.getUniformLocation(mainProgram, 'uModel'), false, cloudModelMatrix);
     gl.uniform1i(uReceiveShadowsLoc, 0); 
     if (cloudVertexCount > 0) gl.drawArrays(gl.TRIANGLES, 0, cloudVertexCount);
-
     requestAnimationFrame(render);
 }
 
 window.onload = function() {
+    initializeSeed(currentSeedString);
+    updateUIFromState();
     setupUI();
     updatePlanetGeometry();
     generateClouds();

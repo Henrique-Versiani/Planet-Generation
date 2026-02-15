@@ -66,13 +66,15 @@ class IcoSphere {
     generateColors(waterLevel, noiseGenerator, strength, freq, maxDepth, palette) {
         this.colors = [];
 
-        const deepWater = palette.deepWater;
-        const shallowWater = palette.shallowWater;
+        const deepWater = palette?.deepWater || [0,0,0.5];
+        const shallowWater = palette?.shallowWater || [0,0.5,1];
 
         for (let i = 0; i < this.vertices.length; i += 3) {
             const x = this.vertices[i], y = this.vertices[i+1], z = this.vertices[i+2];
             const currentLen = Math.sqrt(x*x + y*y + z*z);
-            const nx = x / currentLen; const ny = y / currentLen; const nz = z / currentLen;
+            const nx = x / currentLen; 
+            const ny = y / currentLen; 
+            const nz = z / currentLen;
 
             let r, g, b;
 
@@ -89,14 +91,20 @@ class IcoSphere {
             } else {
                 const altitude = currentLen - waterLevel;
                 let col;
-                if (altitude < 0.02) col = palette.sand;
-                else if (altitude < 0.05) col = palette.grass;
-                else if (altitude < 0.1) col = palette.forest;
-                else if (altitude < 0.15) col = palette.rock;
-                else if (altitude < 0.20) col = palette.rock;
-                else col = palette.snow;
 
-                r = col[0]; g = col[1]; b = col[2];
+                if(!palette) {
+                    r=0.5; g=0.5; b=0.5;
+                } else {
+                    if (altitude < 0.02) col = palette.sand;
+                    else if (altitude < 0.05) col = palette.grass;
+                    else if (altitude < 0.1) col = palette.forest;
+                    else if (altitude < 0.15) col = palette.rock;
+                    else if (altitude < 0.20) col = palette.rock; 
+                    else col = palette.snow;
+                    
+                    if(col) { r=col[0]; g=col[1]; b=col[2]; }
+                    else { r=1; g=0; b=1; }
+                }
             }
             this.colors.push(r, g, b);
         }
@@ -140,8 +148,12 @@ class IcoSphere {
     distributeTrees(plantedPositions, waterLevel, noiseGenerator, strength, freq) {
         const newVertices = [...this.vertices];
         const newColors = [...this.colors];
-        const mat = mat4.create(); const q = quat.create(); const up = vec3.fromValues(0, 1, 0);
-        const pos = vec3.create(); const norm = vec3.create(); const treePos = vec3.create();
+        const mat = mat4.create(); 
+        const q = quat.create(); 
+        const up = vec3.fromValues(0, 1, 0);
+        const pos = vec3.create(); 
+        const norm = vec3.create(); 
+        const treePos = vec3.create();
 
         for (let i = 0; i < plantedPositions.length; i++) {
             const p = plantedPositions[i];
@@ -152,10 +164,12 @@ class IcoSphere {
 
             const noiseVal = noiseGenerator.noise3D(norm[0] * freq, norm[1] * freq, norm[2] * freq);
             let height = 1.0 + (noiseVal * strength);
-            
+
             if (height <= waterLevel) continue; 
+            
             const altitude = height - waterLevel;
-            if (altitude < 0.02 || altitude > 0.35) continue;
+
+            if (altitude < 0.02 || altitude > 0.35) continue; 
 
             vec3.scale(pos, norm, height);
 

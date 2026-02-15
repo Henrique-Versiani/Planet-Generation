@@ -23,6 +23,26 @@ const Utils = {
         return program;
     },
 
+    stringToHash: function(str) {
+        let hash = 0;
+        if (str.length === 0) return hash;
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash |= 0; 
+        }
+        return hash;
+    },
+
+    createSeededRandom: function(seed) {
+        return function() {
+          var t = seed += 0x6D2B79F5;
+          t = Math.imul(t ^ (t >>> 15), t | 1);
+          t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        }
+    },
+
     randomFromSeed: function(seed) {
         var x = Math.sin(seed++) * 10000;
         return x - Math.floor(x);
@@ -82,5 +102,13 @@ const Utils = {
         const g = parseInt(hex.substr(3, 2), 16) / 255;
         const b = parseInt(hex.substr(5, 2), 16) / 255;
         return [r, g, b];
+    },
+
+    rgbToHex: function(r, g, b) {
+        const toHex = (c) => {
+            const hex = Math.round(c * 255).toString(16);
+            return hex.length === 1 ? "0" + hex : hex;
+        };
+        return "#" + toHex(r) + toHex(g) + toHex(b);
     }
 };

@@ -35,13 +35,20 @@
         input[type=range] { width: 100%; cursor: pointer; }
         input[type=color] { border: none; width: 30px; height: 20px; cursor: pointer; background: none; }
         
+        .seed-container { display: flex; gap: 5px; margin-bottom: 10px; }
+        #seedInput { 
+            width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #555; 
+            background: #222; color: #fff; font-family: monospace; text-align: center; 
+        }
+        
         button { 
             width: 100%; padding: 10px; cursor: pointer; 
             background: linear-gradient(45deg, #0077ff, #00bbff); 
             border: none; color: white; border-radius: 6px; font-weight: bold;
             transition: transform 0.1s;
-            margin-top: 15px;
+            margin-top: 5px;
         }
+        button.secondary { background: #444; margin-top: 0; }
         button:hover { transform: translateY(-2px); }
         button:active { transform: translateY(0); }
         
@@ -54,6 +61,16 @@
     <div id="ui-container">
         <h3>Controles do Mundo</h3>
         
+        <h4>Semente (Seed)</h4>
+        <div class="seed-container">
+            <input type="text" id="seedInput" placeholder="Digite uma seed...">
+        </div>
+        <div class="seed-container">
+            <button id="btnLoadSeed" class="secondary">Carregar</button>
+            <button id="btnCopySeed" class="secondary">Copiar</button>
+        </div>
+        <button id="btnRegenerate">🎲 Gerar Aleatório</button>
+
         <h4>Física e Atmosfera</h4>
         <div class="control-group">
             <label>☀️ Posição do Sol</label>
@@ -107,10 +124,6 @@
         </div>
         <div class="control-group">
             <label>Neve <input type="color" id="colSnow" value="#F5F5FF"></label>
-        </div>
-        
-        <div class="control-group">
-            <button id="btnRegenerate">Nova Semente</button>
         </div>
 
         <div class="hint">Clique no terreno verde para plantar árvores.</div>
