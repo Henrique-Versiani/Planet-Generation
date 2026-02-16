@@ -32,9 +32,15 @@
         
         .control-group { margin-bottom: 10px; }
         label { display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; margin-bottom: 5px; color: #ccc; font-weight: bold; }
+        
         input[type=range] { width: 100%; cursor: pointer; }
         input[type=color] { border: none; width: 30px; height: 20px; cursor: pointer; background: none; }
         
+        select {
+            width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #555;
+            background: #222; color: white; cursor: pointer;
+        }
+
         .seed-container { display: flex; gap: 5px; margin-bottom: 10px; }
         #seedInput { 
             width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #555; 
@@ -87,6 +93,14 @@
 
         <h4>Terreno</h4>
         <div class="control-group">
+            <label>Algoritmo de Ruído</label>
+            <select id="noiseType">
+                <option value="simplex">Simplex (Suave)</option>
+                <option value="perlin">Perlin (Clássico)</option>
+                <option value="random">Random (Acidentado)</option>
+            </select>
+        </div>
+        <div class="control-group">
             <label>🏔️ Relevo</label>
             <input type="range" id="noiseStrength" min="0" max="0.3" step="0.01" value="0.1">
         </div>
@@ -126,7 +140,7 @@
             <label>Neve <input type="color" id="colSnow" value="#F5F5FF"></label>
         </div>
 
-        <div class="hint">Clique no terreno verde para plantar árvores.</div>
+        <div class="hint">Clique no terreno para plantar árvores.</div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js"></script>

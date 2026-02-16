@@ -92,6 +92,7 @@ const cloudNormalBuffer = gl.createBuffer();
 const cloudColorBuffer = gl.createBuffer();
 
 const state = { 
+    noiseType: 'simplex',
     noiseStrength: 0.1, 
     noiseFreq: 1.5, 
     waterLevel: 1.0, 
@@ -113,7 +114,7 @@ let numericSeed = 0;
 
 let plantedTrees = []; 
 let currentPlanetGeometry = null;
-let currentNoise = null; 
+let simplexInstance = null;
 let vertexCount = 0;
 let cloudVertexCount = 0;
 let loadedCloudModel = null;
@@ -240,19 +241,33 @@ function initializeSeed(seedStr, clearTrees = true) {
     
     numericSeed = Utils.stringToHash(currentSeedString);
     const seededRandom = Utils.createSeededRandom(numericSeed);
-    currentNoise = new SimplexNoise(seededRandom);
+
+    simplexInstance = new SimplexNoise(seededRandom);
+    Utils.initPerlin(numericSeed);
     
     if(clearTrees) plantedTrees = []; 
 }
 
 function updatePlanetGeometry() {
-    if (!currentNoise) return;
+    if (!simplexInstance) return;
+
+    let getNoiseVal;
+    if (state.noiseType === 'simplex') {
+        getNoiseVal = (x, y, z) => simplexInstance.noise3D(x, y, z);
+    } else if (state.noiseType === 'perlin') {
+        getNoiseVal = (x, y, z) => Utils.PerlinNoise3D(x, y, z);
+    } else if (state.noiseType === 'random') {
+        getNoiseVal = (x, y, z) => Utils.ValueNoise3D(x, y, z, numericSeed);
+    } else {
+        getNoiseVal = (x, y, z) => simplexInstance.noise3D(x, y, z);
+    }
 
     const planet = new IcoSphere(state.resolution); 
-    planet.applyNoise(state.noiseStrength, state.noiseFreq, state.waterLevel, currentNoise);
-    planet.generateColors(state.waterLevel, currentNoise, state.noiseStrength, state.noiseFreq, state.deepWaterThreshold, state.palette);
+
+    planet.applyNoise(state.noiseStrength, state.noiseFreq, state.waterLevel, getNoiseVal);
+    planet.generateColors(state.waterLevel, getNoiseVal, state.noiseStrength, state.noiseFreq, state.deepWaterThreshold, state.palette);
     planet.toFlatGeometry(); 
-    planet.distributeTrees(plantedTrees, state.waterLevel, currentNoise, state.noiseStrength, state.noiseFreq);
+    planet.distributeTrees(plantedTrees, state.waterLevel, getNoiseVal, state.noiseStrength, state.noiseFreq);
     
     planet.calculateNormals();
     currentPlanetGeometry = planet; 
@@ -268,6 +283,7 @@ function updateUIFromState() {
         const el = document.getElementById(id);
         if(el) el.value = val;
     };
+    setVal('noiseType', state.noiseType);
     setVal('noiseStrength', state.noiseStrength);
     setVal('noiseFreq', state.noiseFreq);
     setVal('waterLevel', state.waterLevel);
@@ -299,9 +315,14 @@ function setupUI() {
     bindSlider('deepWaterThreshold', 'deepWaterThreshold');
     bindSlider('resolution', 'resolution', true);
 
+    const elType = document.getElementById('noiseType');
+    if(elType) elType.addEventListener('change', e => {
+        state.noiseType = e.target.value;
+        updatePlanetGeometry();
+    });
+
     const elSun = document.getElementById('sunPosition'); 
     if(elSun) elSun.addEventListener('input', e => sunAngle = parseFloat(e.target.value));
-    
     const elSpeed = document.getElementById('rotationSpeed'); 
     if(elSpeed) elSpeed.addEventListener('input', e => autoRotateSpeed = parseFloat(e.target.value));
 
@@ -320,7 +341,6 @@ function setupUI() {
         document.getElementById(id)?.addEventListener('input', updatePaletteFromUI);
     });
 
-    // Botões
     document.getElementById('btnRegenerate')?.addEventListener('click', () => {
         const newSeed = "Seed-" + Math.floor(Math.random() * 10000);
         initializeSeed(newSeed);
@@ -344,7 +364,6 @@ function setupUI() {
     });
 }
 
-// --- SAVE / LOAD ---
 function serializeWorld() {
     const saveData = { seed: currentSeedString, config: state };
     return btoa(JSON.stringify(saveData));
@@ -354,10 +373,10 @@ function loadFromCode(code) {
     try {
         const jsonStr = atob(code);
         const savedData = JSON.parse(jsonStr);
-        Object.assign(state, savedData.config);
-        initializeSeed(savedData.seed, false);
-        updateUIFromState();
-        updatePlanetGeometry();
+        Object.assign(state, savedData.config); 
+        initializeSeed(savedData.seed, false);  
+        updateUIFromState();                    
+        updatePlanetGeometry();                 
         generateClouds();
     } catch (e) {
         console.log("Código inválido, usando como seed de texto.");
@@ -496,8 +515,8 @@ function render() {
 
 window.onload = function() {
     initializeSeed(currentSeedString);
+    setupUI(); 
     updateUIFromState();
-    setupUI();
     updatePlanetGeometry();
     generateClouds();
     render();

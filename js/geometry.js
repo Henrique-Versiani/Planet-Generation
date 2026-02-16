@@ -51,35 +51,36 @@ class IcoSphere {
         }
     }
 
-    applyNoise(strength, frequency, minLevel, noiseGenerator) {
+    applyNoise(strength, frequency, minLevel, noiseFn) {
         for (let i = 0; i < this.vertices.length; i += 3) {
             let x = this.vertices[i], y = this.vertices[i+1], z = this.vertices[i+2];
-            const noiseValue = noiseGenerator.noise3D(x * frequency, y * frequency, z * frequency);
+
+            const noiseValue = noiseFn(x * frequency, y * frequency, z * frequency);
+            
             let deformation = 1.0 + (noiseValue * strength);
             if (deformation < minLevel) deformation = minLevel;
+            
             this.vertices[i] = x * deformation;
             this.vertices[i + 1] = y * deformation;
             this.vertices[i + 2] = z * deformation;
         }
     }
 
-    generateColors(waterLevel, noiseGenerator, strength, freq, maxDepth, palette) {
+    generateColors(waterLevel, noiseFn, strength, freq, maxDepth, palette) {
         this.colors = [];
-
         const deepWater = palette?.deepWater || [0,0,0.5];
         const shallowWater = palette?.shallowWater || [0,0.5,1];
 
         for (let i = 0; i < this.vertices.length; i += 3) {
             const x = this.vertices[i], y = this.vertices[i+1], z = this.vertices[i+2];
             const currentLen = Math.sqrt(x*x + y*y + z*z);
-            const nx = x / currentLen; 
-            const ny = y / currentLen; 
-            const nz = z / currentLen;
+            const nx = x / currentLen; const ny = y / currentLen; const nz = z / currentLen;
 
             let r, g, b;
 
             if (currentLen <= waterLevel + 0.001) {
-                const noiseVal = noiseGenerator.noise3D(nx * freq, ny * freq, nz * freq);
+                const noiseVal = noiseFn(nx * freq, ny * freq, nz * freq);
+                
                 const theoreticalHeight = 1.0 + (noiseVal * strength);
                 const depth = waterLevel - theoreticalHeight;
                 let depthFactor = depth / maxDepth;
@@ -91,7 +92,6 @@ class IcoSphere {
             } else {
                 const altitude = currentLen - waterLevel;
                 let col;
-
                 if(!palette) {
                     r=0.5; g=0.5; b=0.5;
                 } else {
@@ -101,7 +101,6 @@ class IcoSphere {
                     else if (altitude < 0.15) col = palette.rock;
                     else if (altitude < 0.20) col = palette.rock; 
                     else col = palette.snow;
-                    
                     if(col) { r=col[0]; g=col[1]; b=col[2]; }
                     else { r=1; g=0; b=1; }
                 }
@@ -145,30 +144,23 @@ class IcoSphere {
         return { v: treeVertices, c: treeColors };
     }
 
-    distributeTrees(plantedPositions, waterLevel, noiseGenerator, strength, freq) {
+    distributeTrees(plantedPositions, waterLevel, noiseFn, strength, freq) {
         const newVertices = [...this.vertices];
         const newColors = [...this.colors];
-        const mat = mat4.create(); 
-        const q = quat.create(); 
-        const up = vec3.fromValues(0, 1, 0);
-        const pos = vec3.create(); 
-        const norm = vec3.create(); 
-        const treePos = vec3.create();
+        const mat = mat4.create(); const q = quat.create(); const up = vec3.fromValues(0, 1, 0);
+        const pos = vec3.create(); const norm = vec3.create(); const treePos = vec3.create();
 
         for (let i = 0; i < plantedPositions.length; i++) {
             const p = plantedPositions[i];
             const seed = p.x + p.y + p.z;
-            
             vec3.set(norm, p.x, p.y, p.z);
             vec3.normalize(norm, norm);
 
-            const noiseVal = noiseGenerator.noise3D(norm[0] * freq, norm[1] * freq, norm[2] * freq);
-            let height = 1.0 + (noiseVal * strength);
-
-            if (height <= waterLevel) continue; 
+            const noiseVal = noiseFn(norm[0] * freq, norm[1] * freq, norm[2] * freq);
             
+            let height = 1.0 + (noiseVal * strength);
+            if (height <= waterLevel) continue; 
             const altitude = height - waterLevel;
-
             if (altitude < 0.02 || altitude > 0.35) continue; 
 
             vec3.scale(pos, norm, height);
