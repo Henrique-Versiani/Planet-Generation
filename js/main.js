@@ -188,8 +188,8 @@ function castRay(mouseX, mouseY) {
     vec3.set(rayDirLocal, rayDirVec4_Local[0], rayDirVec4_Local[1], rayDirVec4_Local[2]);
     vec3.normalize(rayDirLocal, rayDirLocal);
 
-    let closestDist = Infinity; let hitPoint = null; let hitColor = null;
-    const verts = currentPlanetGeometry.vertices; const colors = currentPlanetGeometry.colors;
+    let closestDist = Infinity; let hitPoint = null; 
+    const verts = currentPlanetGeometry.vertices;
     const limit = verts.length; 
 
     for (let i = 0; i < limit; i += 9) {
@@ -204,15 +204,19 @@ function castRay(mouseX, mouseY) {
             if (dist < closestDist) {
                 closestDist = dist; 
                 hitPoint = hit; 
-                hitColor = { r: colors[i], g: colors[i+1], b: colors[i+2] };
             }
         }
     }
 
     if (hitPoint) {
-        if (hitColor.g > hitColor.r && hitColor.g > hitColor.b) {
+        const radius = Math.sqrt(hitPoint[0]*hitPoint[0] + hitPoint[1]*hitPoint[1] + hitPoint[2]*hitPoint[2]);
+        const altitude = radius - state.waterLevel;
+
+        if (altitude > 0.02 && altitude < 0.35) {
             plantedTrees.push({ x: hitPoint[0], y: hitPoint[1], z: hitPoint[2] });
             updatePlanetGeometry(); 
+        } else {
+            console.log("Solo inválido para plantio. Altitude: " + altitude.toFixed(3));
         }
     }
 }
@@ -241,7 +245,7 @@ function initializeSeed(seedStr, clearTrees = true) {
     
     numericSeed = Utils.stringToHash(currentSeedString);
     const seededRandom = Utils.createSeededRandom(numericSeed);
-
+    
     simplexInstance = new SimplexNoise(seededRandom);
     Utils.initPerlin(numericSeed);
     
@@ -263,7 +267,7 @@ function updatePlanetGeometry() {
     }
 
     const planet = new IcoSphere(state.resolution); 
-
+    
     planet.applyNoise(state.noiseStrength, state.noiseFreq, state.waterLevel, getNoiseVal);
     planet.generateColors(state.waterLevel, getNoiseVal, state.noiseStrength, state.noiseFreq, state.deepWaterThreshold, state.palette);
     planet.toFlatGeometry(); 
@@ -300,6 +304,26 @@ function updateUIFromState() {
             el.value = Utils.rgbToHex(rgb[0], rgb[1], rgb[2]);
         }
     });
+}
+
+function randomizeState() {
+    state.noiseStrength = 0.05 + Math.random() * 0.45; 
+    state.noiseFreq = 0.5 + Math.random() * 2.5;       
+    state.waterLevel = 0.9 + Math.random() * 0.25;     
+    state.deepWaterThreshold = 0.05 + Math.random() * 0.3; 
+
+    const types = ['simplex', 'perlin', 'random'];
+    state.noiseType = types[Math.floor(Math.random() * types.length)];
+
+    const randColor = () => [Math.random(), Math.random(), Math.random()];
+    
+    state.palette.deepWater = randColor();
+    state.palette.shallowWater = randColor();
+    state.palette.sand = randColor();
+    state.palette.grass = randColor();
+    state.palette.forest = randColor();
+    state.palette.rock = randColor();
+    state.palette.snow = randColor();
 }
 
 function setupUI() {
@@ -344,6 +368,8 @@ function setupUI() {
     document.getElementById('btnRegenerate')?.addEventListener('click', () => {
         const newSeed = "Seed-" + Math.floor(Math.random() * 10000);
         initializeSeed(newSeed);
+        randomizeState();
+        updateUIFromState();
         updatePlanetGeometry(); 
         generateClouds();
     });
@@ -515,7 +541,7 @@ function render() {
 
 window.onload = function() {
     initializeSeed(currentSeedString);
-    setupUI(); 
+    setupUI();
     updateUIFromState();
     updatePlanetGeometry();
     generateClouds();
