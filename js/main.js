@@ -114,10 +114,17 @@ let numericSeed = 0;
 
 let plantedTrees = []; 
 let currentPlanetGeometry = null;
-let simplexInstance = null;
+let simplexInstance = null; 
 let vertexCount = 0;
 let cloudVertexCount = 0;
 let loadedCloudModel = null;
+
+let animationState = {
+    active: false,
+    startTime: 0,
+    duration: 1500,
+    currentScale: 1.0
+};
 
 let isDragging = false;
 let lastMouseX = 0, lastMouseY = 0;
@@ -139,6 +146,12 @@ const lightViewMatrix = mat4.create();
 const lightSpaceMatrix = mat4.create();
 
 mat4.ortho(lightProjectionMatrix, -10, 10, -10, 10, 0.1, 50.0);
+
+function triggerPlanetAnimation() {
+    animationState.active = true;
+    animationState.startTime = performance.now();
+    animationState.currentScale = 0.0;
+}
 
 function rayIntersectsTriangle(rayOrigin, rayDir, v0, v1, v2) {
     const edge1 = vec3.create(); vec3.subtract(edge1, v1, v0);
@@ -211,12 +224,9 @@ function castRay(mouseX, mouseY) {
     if (hitPoint) {
         const radius = Math.sqrt(hitPoint[0]*hitPoint[0] + hitPoint[1]*hitPoint[1] + hitPoint[2]*hitPoint[2]);
         const altitude = radius - state.waterLevel;
-
         if (altitude > 0.02 && altitude < 0.35) {
             plantedTrees.push({ x: hitPoint[0], y: hitPoint[1], z: hitPoint[2] });
             updatePlanetGeometry(); 
-        } else {
-            console.log("Solo inválido para plantio. Altitude: " + altitude.toFixed(3));
         }
     }
 }
@@ -250,6 +260,8 @@ function initializeSeed(seedStr, clearTrees = true) {
     Utils.initPerlin(numericSeed);
     
     if(clearTrees) plantedTrees = []; 
+
+    triggerPlanetAnimation();
 }
 
 function updatePlanetGeometry() {
@@ -324,6 +336,8 @@ function randomizeState() {
     state.palette.forest = randColor();
     state.palette.rock = randColor();
     state.palette.snow = randColor();
+
+    triggerPlanetAnimation();
 }
 
 function setupUI() {
@@ -473,15 +487,36 @@ async function generateClouds() {
 function render() {
     if (!isDragging) planetRotY += autoRotateSpeed;
     cloudRotY += autoRotateSpeed * 1.5; 
+
+    let animScale = 1.0;
+    if (animationState.active) {
+        const now = performance.now();
+        const elapsed = now - animationState.startTime;
+        const progress = Math.min(elapsed / animationState.duration, 1.0);
+
+        animScale = Utils.easeOutElastic(progress);
+
+        if (progress >= 1.0) {
+            animationState.active = false;
+            animScale = 1.0;
+        }
+    }
+    
     mat4.identity(mouseRotMatrix);
     mat4.rotateX(mouseRotMatrix, mouseRotMatrix, mouseRotX);
     mat4.rotateY(mouseRotMatrix, mouseRotMatrix, mouseRotY);
     mat4.identity(modelMatrix);
     mat4.multiply(modelMatrix, mouseRotMatrix, modelMatrix);
     mat4.rotateY(modelMatrix, modelMatrix, planetRotY);
+
+    mat4.scale(modelMatrix, modelMatrix, [animScale, animScale, animScale]);
+
     mat4.identity(cloudModelMatrix);
     mat4.multiply(cloudModelMatrix, mouseRotMatrix, cloudModelMatrix);
     mat4.rotateY(cloudModelMatrix, cloudModelMatrix, cloudRotY);
+
+    mat4.scale(cloudModelMatrix, cloudModelMatrix, [animScale, animScale, animScale]);
+
     const sunX = Math.sin(sunAngle); const sunZ = Math.cos(sunAngle);
     const baseLightPos = vec3.fromValues(sunX * 20.0, 10.0, sunZ * 20.0);
     const lightPos = vec3.create(); vec3.transformMat4(lightPos, baseLightPos, mouseRotMatrix);

@@ -115,12 +115,9 @@ const Utils = {
     ValueNoise3D: function(x, y, z, seed) {
         const floorX = Math.floor(x); const floorY = Math.floor(y); const floorZ = Math.floor(z);
         const fractX = x - floorX; const fractY = y - floorY; const fractZ = z - floorZ;
-        
         const smooth = (t) => t * t * (3 - 2 * t);
         const u = smooth(fractX); const v = smooth(fractY); const w = smooth(fractZ);
-
         const hash = (i, j, k) => Utils.pseudoRandom3D(i, j, k, seed);
-
         const n000 = hash(floorX, floorY, floorZ);
         const n100 = hash(floorX + 1, floorY, floorZ);
         const n010 = hash(floorX, floorY + 1, floorZ);
@@ -129,16 +126,13 @@ const Utils = {
         const n101 = hash(floorX + 1, floorY, floorZ + 1);
         const n011 = hash(floorX, floorY + 1, floorZ + 1);
         const n111 = hash(floorX + 1, floorY + 1, floorZ + 1);
-
         const i1 = n000 + u * (n100 - n000);
         const i2 = n010 + u * (n110 - n010);
         const j1 = i1 + v * (i2 - i1);
-
         const i3 = n001 + u * (n101 - n001);
         const i4 = n011 + u * (n111 - n011);
         const j2 = i3 + v * (i4 - i3);
-
-        return (j1 + w * (j2 - j1)) * 2.0 - 1.0;
+        return (j1 + w * (j2 - j1)) * 2.0 - 1.0; 
     },
 
     perlinPermutation: null,
@@ -156,27 +150,27 @@ const Utils = {
 
     PerlinNoise3D: function(x, y, z) {
         if(!this.perlinPermutation) this.initPerlin(0);
-        
         const X = Math.floor(x) & 255; const Y = Math.floor(y) & 255; const Z = Math.floor(z) & 255;
         x -= Math.floor(x); y -= Math.floor(y); z -= Math.floor(z);
-        
         const fade = (t) => t * t * t * (t * (t * 6 - 15) + 10);
         const u = fade(x); const v = fade(y); const w = fade(z);
-        
         const p = this.perlinPermutation;
         const A = p[X]+Y, AA = p[A]+Z, AB = p[A+1]+Z;
         const B = p[X+1]+Y, BA = p[B]+Z, BB = p[B+1]+Z;
-
         const grad = (hash, x, y, z) => {
             const h = hash & 15;
             const u = h < 8 ? x : y;
             const v = h < 4 ? y : h === 12 || h === 14 ? x : z;
             return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
         };
-
         return ((1-w) * ((1-v) * ((1-u) * grad(p[AA], x, y, z) + u * grad(p[BA], x-1, y, z)) +
                          v * ((1-u) * grad(p[AB], x, y-1, z) + u * grad(p[BB], x-1, y-1, z))) +
                  w * ((1-v) * ((1-u) * grad(p[AA+1], x, y, z-1) + u * grad(p[BA+1], x-1, y, z-1)) +
                       v * ((1-u) * grad(p[AB+1], x, y-1, z-1) + u * grad(p[BB+1], x-1, y-1, z-1))));
+    },
+
+    easeOutElastic: function(x) {
+        const c4 = (2 * Math.PI) / 3;
+        return x === 0 ? 0 : x === 1 ? 1 : Math.pow(2, -10 * x) * Math.sin((x * 10 - 0.75) * c4) + 1;
     }
 };
