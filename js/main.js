@@ -64,12 +64,35 @@ const fsSource = `
     }
 `;
 
+const starVsSource = `
+    attribute vec3 aPosition;
+    attribute float aSize;
+    uniform mat4 uView;
+    uniform mat4 uProjection;
+    uniform mat4 uModel; // Para rotacionar com o mouse
+    void main() {
+        gl_Position = uProjection * uView * uModel * vec4(aPosition, 1.0);
+        gl_PointSize = aSize; // Tamanho variável
+    }
+`;
+const starFsSource = `
+    precision mediump float;
+    void main() {
+        gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0); // Branco puro
+    }
+`;
+
 const mainVs = Utils.createShader(gl, gl.VERTEX_SHADER, vsSource);
 const mainFs = Utils.createShader(gl, gl.FRAGMENT_SHADER, fsSource);
 const mainProgram = Utils.createProgram(gl, mainVs, mainFs);
+
 const shadowVs = Utils.createShader(gl, gl.VERTEX_SHADER, shadowVsSource);
 const shadowFs = Utils.createShader(gl, gl.FRAGMENT_SHADER, shadowFsSource);
 const shadowProgram = Utils.createProgram(gl, shadowVs, shadowFs);
+
+const starVs = Utils.createShader(gl, gl.VERTEX_SHADER, starVsSource);
+const starFs = Utils.createShader(gl, gl.FRAGMENT_SHADER, starFsSource);
+const starProgram = Utils.createProgram(gl, starVs, starFs);
 
 const shadowDepthTexture = gl.createTexture();
 const shadowTextureSize = 2048;
@@ -90,22 +113,28 @@ const colorBuffer = gl.createBuffer();
 const cloudPositionBuffer = gl.createBuffer();
 const cloudNormalBuffer = gl.createBuffer();
 const cloudColorBuffer = gl.createBuffer();
+const planePositionBuffer = gl.createBuffer();
+const planeNormalBuffer = gl.createBuffer();
+const planeColorBuffer = gl.createBuffer();
+
+const starPositionBuffer = gl.createBuffer();
+const starSizeBuffer = gl.createBuffer();
 
 const state = { 
     noiseType: 'simplex',
-    noiseStrength: 0.1, 
+    noiseStrength: 0.12, 
     noiseFreq: 1.5, 
     waterLevel: 1.0, 
     resolution: 5, 
     deepWaterThreshold: 0.15,
     palette: {
-        deepWater: [0.01, 0.03, 0.25],
-        shallowWater: [0.2, 0.7, 0.9],
-        sand: [0.94, 0.86, 0.59],
-        grass: [0.33, 0.73, 0.22],
-        forest: [0.18, 0.53, 0.18],
-        rock: [0.55, 0.48, 0.42],
-        snow: [0.96, 0.96, 1.0]
+        deepWater: [0.02, 0.08, 0.25],
+        shallowWater: [0.15, 0.65, 0.75],
+        sand: [0.88, 0.84, 0.65],
+        grass: [0.28, 0.55, 0.20],
+        forest: [0.10, 0.35, 0.10],
+        rock: [0.45, 0.40, 0.38],
+        snow: [0.95, 0.95, 1.0]
     } 
 };
 
@@ -117,6 +146,8 @@ let currentPlanetGeometry = null;
 let simplexInstance = null; 
 let vertexCount = 0;
 let cloudVertexCount = 0;
+let planeVertexCount = 0;
+let starCount = 0;
 let loadedCloudModel = null;
 
 let animationState = {
@@ -125,6 +156,9 @@ let animationState = {
     duration: 1500,
     currentScale: 1.0
 };
+
+let planeOrbitAngle = 0;
+let planeSpeed = 0.005;
 
 let isDragging = false;
 let lastMouseX = 0, lastMouseY = 0;
@@ -138,6 +172,7 @@ let cameraDistance = 6.0;
 
 const modelMatrix = mat4.create();
 const cloudModelMatrix = mat4.create(); 
+const planeModelMatrix = mat4.create(); 
 const viewMatrix = mat4.create();
 const projectionMatrix = mat4.create();
 const mouseRotMatrix = mat4.create();
@@ -260,8 +295,9 @@ function initializeSeed(seedStr, clearTrees = true) {
     Utils.initPerlin(numericSeed);
     
     if(clearTrees) plantedTrees = []; 
-
+    
     triggerPlanetAnimation();
+    generateStars();
 }
 
 function updatePlanetGeometry() {
@@ -319,24 +355,63 @@ function updateUIFromState() {
 }
 
 function randomizeState() {
-    state.noiseStrength = 0.05 + Math.random() * 0.45; 
-    state.noiseFreq = 0.5 + Math.random() * 2.5;       
-    state.waterLevel = 0.9 + Math.random() * 0.25;     
-    state.deepWaterThreshold = 0.05 + Math.random() * 0.3; 
+    state.noiseStrength = 0.08 + Math.random() * 0.35; 
+    state.noiseFreq = 0.8 + Math.random() * 2.2;       
+    state.waterLevel = 0.95 + Math.random() * 0.15;     
+    state.deepWaterThreshold = 0.05 + Math.random() * 0.25; 
 
     const types = ['simplex', 'perlin', 'random'];
     state.noiseType = types[Math.floor(Math.random() * types.length)];
 
-    const randColor = () => [Math.random(), Math.random(), Math.random()];
-    
-    state.palette.deepWater = randColor();
-    state.palette.shallowWater = randColor();
-    state.palette.sand = randColor();
-    state.palette.grass = randColor();
-    state.palette.forest = randColor();
-    state.palette.rock = randColor();
-    state.palette.snow = randColor();
+    const themes = [
+        {
+            deep: [0.0, 0.05, 0.2 + Math.random()*0.1],
+            shallow: [0.0, 0.4 + Math.random()*0.2, 0.6 + Math.random()*0.2],
+            sand: [0.8 + Math.random()*0.1, 0.8 + Math.random()*0.1, 0.6],
+            grass: [0.2, 0.5 + Math.random()*0.2, 0.1],
+            forest: [0.05, 0.25 + Math.random()*0.1, 0.05],
+            rock: [0.4, 0.35, 0.3],
+            snow: [0.95, 0.95, 1.0]
+        },
+        {
+            deep: [0.4, 0.1, 0.05], 
+            shallow: [0.7, 0.3, 0.1],
+            sand: [0.9, 0.6, 0.2],
+            grass: [0.8, 0.4, 0.1],
+            forest: [0.5, 0.2, 0.05],
+            rock: [0.3, 0.1, 0.0],
+            snow: [0.8, 0.5, 0.4] 
+        },
+        {
+            deep: [0.05, 0.1, 0.3],
+            shallow: [0.3, 0.5, 0.8],
+            sand: [0.7, 0.8, 0.9],
+            grass: [0.8, 0.9, 1.0], 
+            forest: [0.5, 0.6, 0.7],
+            rock: [0.2, 0.3, 0.4],
+            snow: [1.0, 1.0, 1.0]
+        },
+        {
+            deep: [0.1, 0.0, 0.2], 
+            shallow: [0.4, 0.0, 0.6],
+            sand: [0.1, 0.1, 0.1], 
+            grass: [0.2, 0.8, 0.2], 
+            forest: [0.4, 0.0, 0.4], 
+            rock: [0.2, 0.2, 0.25],
+            snow: [0.0, 1.0, 0.5] 
+        }
+    ];
 
+    const theme = themes[Math.floor(Math.random() * themes.length)];
+
+    state.palette.deepWater = theme.deep;
+    state.palette.shallowWater = theme.shallow;
+    state.palette.sand = theme.sand;
+    state.palette.grass = theme.grass;
+    state.palette.forest = theme.forest;
+    state.palette.rock = theme.rock;
+    state.palette.snow = theme.snow;
+    
     triggerPlanetAnimation();
 }
 
@@ -484,70 +559,184 @@ async function generateClouds() {
     cloudVertexCount = finalVertices.length / 3;
 }
 
+function generateStars() {
+    const positions = [];
+    const sizes = [];
+    starCount = 2000;
+
+    const dist = 80.0;
+
+    for(let i=0; i<starCount; i++) {
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+
+        const r = dist + (Math.random() * 20.0);
+
+        const x = r * Math.sin(phi) * Math.cos(theta);
+        const y = r * Math.sin(phi) * Math.sin(theta);
+        const z = r * Math.cos(phi);
+
+        positions.push(x, y, z);
+
+        sizes.push(1.0 + Math.random() * 2.0);
+    }
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, starPositionBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, starSizeBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(sizes), gl.STATIC_DRAW);
+}
+
+async function loadAirplane() {
+    try {
+        const response = await fetch('aviao.obj');
+        if (!response.ok) throw new Error('Falha ao carregar aviao.obj');
+        const text = await response.text();
+        const model = Utils.parseOBJ(text);
+
+        const planeColors = [];
+        for(let i=0; i<model.vertices.length/3; i++) {
+            planeColors.push(0.9, 0.9, 0.95); 
+        }
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, planePositionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(model.vertices), gl.STATIC_DRAW);
+        
+        gl.bindBuffer(gl.ARRAY_BUFFER, planeNormalBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(model.normals), gl.STATIC_DRAW);
+        
+        gl.bindBuffer(gl.ARRAY_BUFFER, planeColorBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(planeColors), gl.STATIC_DRAW);
+        
+        planeVertexCount = model.vertices.length / 3;
+
+    } catch (err) {
+        console.log("Usando avião fallback (Design Colorido)");
+        const vertices = [
+            0, 0, 0.5,   -0.2, 0, -0.2,   0.2, 0, -0.2,
+            0, 0, 0.5,   0.2, 0, -0.2,    0, 0.15, -0.1,
+            0, 0, 0.5,   0, 0.15, -0.1,   -0.2, 0, -0.2,
+            0, 0, -0.2,  0, 0.2, -0.3,    0, 0, -0.3
+        ];
+        const normals = [
+            0,1,0, 0,1,0, 0,1,0,
+            1,1,0, 1,1,0, 1,1,0,
+            -1,1,0, -1,1,0, -1,1,0,
+            0,0,1, 0,0,1, 0,0,1
+        ];
+        const colors = [
+            0.9, 0.9, 0.9,   0.9, 0.9, 0.9,   0.9, 0.9, 0.9,
+            0.9, 0.9, 0.9,   0.9, 0.9, 0.9,   0.1, 0.1, 0.3,
+            0.9, 0.9, 0.9,   0.1, 0.1, 0.3,   0.9, 0.9, 0.9,
+            0.8, 0.1, 0.1,   0.8, 0.1, 0.1,   0.8, 0.1, 0.1
+        ];
+        
+        gl.bindBuffer(gl.ARRAY_BUFFER, planePositionBuffer); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, planeNormalBuffer); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normals), gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, planeColorBuffer); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+        planeVertexCount = vertices.length / 3;
+    }
+}
+
 function render() {
     if (!isDragging) planetRotY += autoRotateSpeed;
     cloudRotY += autoRotateSpeed * 1.5; 
-
+    
     let animScale = 1.0;
     if (animationState.active) {
         const now = performance.now();
         const elapsed = now - animationState.startTime;
         const progress = Math.min(elapsed / animationState.duration, 1.0);
-
         animScale = Utils.easeOutElastic(progress);
-
         if (progress >= 1.0) {
             animationState.active = false;
             animScale = 1.0;
         }
     }
     
+    planeOrbitAngle += planeSpeed;
+
     mat4.identity(mouseRotMatrix);
     mat4.rotateX(mouseRotMatrix, mouseRotMatrix, mouseRotX);
     mat4.rotateY(mouseRotMatrix, mouseRotMatrix, mouseRotY);
+
     mat4.identity(modelMatrix);
     mat4.multiply(modelMatrix, mouseRotMatrix, modelMatrix);
     mat4.rotateY(modelMatrix, modelMatrix, planetRotY);
-
     mat4.scale(modelMatrix, modelMatrix, [animScale, animScale, animScale]);
 
     mat4.identity(cloudModelMatrix);
     mat4.multiply(cloudModelMatrix, mouseRotMatrix, cloudModelMatrix);
     mat4.rotateY(cloudModelMatrix, cloudModelMatrix, cloudRotY);
-
     mat4.scale(cloudModelMatrix, cloudModelMatrix, [animScale, animScale, animScale]);
+
+    mat4.identity(planeModelMatrix);
+    mat4.multiply(planeModelMatrix, mouseRotMatrix, planeModelMatrix);
+    mat4.rotateZ(planeModelMatrix, planeModelMatrix, 0.3); 
+    mat4.rotateY(planeModelMatrix, planeModelMatrix, planeOrbitAngle); 
+    mat4.translate(planeModelMatrix, planeModelMatrix, [0, 0, 1.6]); 
+    mat4.rotateX(planeModelMatrix, planeModelMatrix, Math.PI / 2);
+    mat4.rotateY(planeModelMatrix, planeModelMatrix, -Math.PI / 1);
+    mat4.rotateX(planeModelMatrix, planeModelMatrix, -Math.PI / 2);
+    const planeScale = 0.0002 * animScale; 
+    mat4.scale(planeModelMatrix, planeModelMatrix, [planeScale, planeScale, planeScale]);
 
     const sunX = Math.sin(sunAngle); const sunZ = Math.cos(sunAngle);
     const baseLightPos = vec3.fromValues(sunX * 20.0, 10.0, sunZ * 20.0);
     const lightPos = vec3.create(); vec3.transformMat4(lightPos, baseLightPos, mouseRotMatrix);
     mat4.lookAt(lightViewMatrix, lightPos, [0,0,0], [0,1,0]);
     mat4.multiply(lightSpaceMatrix, lightProjectionMatrix, lightViewMatrix);
+
     gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFramebuffer);
     gl.viewport(0, 0, shadowTextureSize, shadowTextureSize);
     gl.clear(gl.DEPTH_BUFFER_BIT);
     gl.useProgram(shadowProgram);
     gl.uniformMatrix4fv(gl.getUniformLocation(shadowProgram, 'uLightMatrix'), false, lightSpaceMatrix);
     gl.disable(gl.CULL_FACE); 
+
     const sPos = gl.getAttribLocation(shadowProgram, 'aPosition');
     gl.enableVertexAttribArray(sPos);
+
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
     gl.vertexAttribPointer(sPos, 3, gl.FLOAT, false, 0, 0);
     gl.uniformMatrix4fv(gl.getUniformLocation(shadowProgram, 'uModel'), false, modelMatrix);
     if (vertexCount > 0) gl.drawArrays(gl.TRIANGLES, 0, vertexCount);
-    gl.bindBuffer(gl.ARRAY_BUFFER, cloudPositionBuffer);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, planePositionBuffer);
     gl.vertexAttribPointer(sPos, 3, gl.FLOAT, false, 0, 0);
-    gl.uniformMatrix4fv(gl.getUniformLocation(shadowProgram, 'uModel'), false, cloudModelMatrix);
-    if (cloudVertexCount > 0) gl.drawArrays(gl.TRIANGLES, 0, cloudVertexCount);
+    gl.uniformMatrix4fv(gl.getUniformLocation(shadowProgram, 'uModel'), false, planeModelMatrix);
+    if (planeVertexCount > 0) gl.drawArrays(gl.TRIANGLES, 0, planeVertexCount);
+
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, canvas.width, canvas.height);
-    gl.clearColor(0.1, 0.1, 0.1, 1.0);
+    gl.clearColor(0.05, 0.05, 0.08, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.enable(gl.DEPTH_TEST);
     gl.enable(gl.CULL_FACE);
     gl.cullFace(gl.BACK);
-    gl.useProgram(mainProgram);
+    
     mat4.perspective(projectionMatrix, Math.PI / 4, canvas.width / canvas.height, 0.1, 100.0);
     mat4.lookAt(viewMatrix, [0, 0, cameraDistance], [0, 0, 0], [0, 1, 0]);
+
+    gl.useProgram(starProgram);
+    gl.uniformMatrix4fv(gl.getUniformLocation(starProgram, 'uProjection'), false, projectionMatrix);
+    gl.uniformMatrix4fv(gl.getUniformLocation(starProgram, 'uView'), false, viewMatrix);
+    gl.uniformMatrix4fv(gl.getUniformLocation(starProgram, 'uModel'), false, mouseRotMatrix);
+
+    const starPosLoc = gl.getAttribLocation(starProgram, 'aPosition');
+    const starSizeLoc = gl.getAttribLocation(starProgram, 'aSize');
+    gl.enableVertexAttribArray(starPosLoc);
+    gl.enableVertexAttribArray(starSizeLoc);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, starPositionBuffer);
+    gl.vertexAttribPointer(starPosLoc, 3, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, starSizeBuffer);
+    gl.vertexAttribPointer(starSizeLoc, 1, gl.FLOAT, false, 0, 0);
+
+    gl.drawArrays(gl.POINTS, 0, starCount);
+
+    gl.useProgram(mainProgram);
     gl.uniformMatrix4fv(gl.getUniformLocation(mainProgram, 'uProjection'), false, projectionMatrix);
     gl.uniformMatrix4fv(gl.getUniformLocation(mainProgram, 'uView'), false, viewMatrix);
     gl.uniformMatrix4fv(gl.getUniformLocation(mainProgram, 'uLightMatrix'), false, lightSpaceMatrix);
@@ -555,22 +744,36 @@ function render() {
     gl.uniform3fv(gl.getUniformLocation(mainProgram, 'uLightDirection'), lightDirVec);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, shadowDepthTexture);
     gl.uniform1i(gl.getUniformLocation(mainProgram, 'uShadowMap'), 0);
+
     const mPos = gl.getAttribLocation(mainProgram, 'aPosition'); gl.enableVertexAttribArray(mPos);
     const mNorm = gl.getAttribLocation(mainProgram, 'aNormal'); gl.enableVertexAttribArray(mNorm);
     const mCol = gl.getAttribLocation(mainProgram, 'aColor'); gl.enableVertexAttribArray(mCol);
     const uReceiveShadowsLoc = gl.getUniformLocation(mainProgram, 'uReceiveShadows');
+
+    // Planeta
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer); gl.vertexAttribPointer(mPos, 3, gl.FLOAT, false, 0, 0);
     gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer); gl.vertexAttribPointer(mNorm, 3, gl.FLOAT, false, 0, 0);
     gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer); gl.vertexAttribPointer(mCol, 3, gl.FLOAT, false, 0, 0);
     gl.uniformMatrix4fv(gl.getUniformLocation(mainProgram, 'uModel'), false, modelMatrix);
     gl.uniform1i(uReceiveShadowsLoc, 1); 
     if (vertexCount > 0) gl.drawArrays(gl.TRIANGLES, 0, vertexCount);
+
+    // Avião
+    gl.bindBuffer(gl.ARRAY_BUFFER, planePositionBuffer); gl.vertexAttribPointer(mPos, 3, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, planeNormalBuffer); gl.vertexAttribPointer(mNorm, 3, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, planeColorBuffer); gl.vertexAttribPointer(mCol, 3, gl.FLOAT, false, 0, 0);
+    gl.uniformMatrix4fv(gl.getUniformLocation(mainProgram, 'uModel'), false, planeModelMatrix);
+    gl.uniform1i(uReceiveShadowsLoc, 0); 
+    if (planeVertexCount > 0) gl.drawArrays(gl.TRIANGLES, 0, planeVertexCount);
+
+    // Nuvens
     gl.bindBuffer(gl.ARRAY_BUFFER, cloudPositionBuffer); gl.vertexAttribPointer(mPos, 3, gl.FLOAT, false, 0, 0);
     gl.bindBuffer(gl.ARRAY_BUFFER, cloudNormalBuffer); gl.vertexAttribPointer(mNorm, 3, gl.FLOAT, false, 0, 0);
     gl.bindBuffer(gl.ARRAY_BUFFER, cloudColorBuffer); gl.vertexAttribPointer(mCol, 3, gl.FLOAT, false, 0, 0);
     gl.uniformMatrix4fv(gl.getUniformLocation(mainProgram, 'uModel'), false, cloudModelMatrix);
     gl.uniform1i(uReceiveShadowsLoc, 0); 
     if (cloudVertexCount > 0) gl.drawArrays(gl.TRIANGLES, 0, cloudVertexCount);
+
     requestAnimationFrame(render);
 }
 
@@ -580,5 +783,6 @@ window.onload = function() {
     updateUIFromState();
     updatePlanetGeometry();
     generateClouds();
+    loadAirplane(); 
     render();
 };
