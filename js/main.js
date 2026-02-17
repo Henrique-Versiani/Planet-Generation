@@ -122,7 +122,7 @@ const starSizeBuffer = gl.createBuffer();
 
 const state = { 
     noiseType: 'simplex',
-    noiseStrength: 0.12, 
+    noiseStrength: 0.1, 
     noiseFreq: 1.5, 
     waterLevel: 1.0, 
     resolution: 5, 
@@ -355,63 +355,52 @@ function updateUIFromState() {
 }
 
 function randomizeState() {
-    state.noiseStrength = 0.08 + Math.random() * 0.35; 
-    state.noiseFreq = 0.8 + Math.random() * 2.2;       
-    state.waterLevel = 0.95 + Math.random() * 0.15;     
-    state.deepWaterThreshold = 0.05 + Math.random() * 0.25; 
+    state.noiseStrength = 0.05 + Math.random() * 0.45; 
+    state.noiseFreq = 0.5 + Math.random() * 2.5;       
+    state.waterLevel = 0.9 + Math.random() * 0.25;     
+    state.deepWaterThreshold = 0.05 + Math.random() * 0.3; 
 
     const types = ['simplex', 'perlin', 'random'];
     state.noiseType = types[Math.floor(Math.random() * types.length)];
 
-    const themes = [
-        {
-            deep: [0.0, 0.05, 0.2 + Math.random()*0.1],
-            shallow: [0.0, 0.4 + Math.random()*0.2, 0.6 + Math.random()*0.2],
-            sand: [0.8 + Math.random()*0.1, 0.8 + Math.random()*0.1, 0.6],
-            grass: [0.2, 0.5 + Math.random()*0.2, 0.1],
-            forest: [0.05, 0.25 + Math.random()*0.1, 0.05],
-            rock: [0.4, 0.35, 0.3],
-            snow: [0.95, 0.95, 1.0]
-        },
-        {
-            deep: [0.4, 0.1, 0.05], 
-            shallow: [0.7, 0.3, 0.1],
-            sand: [0.9, 0.6, 0.2],
-            grass: [0.8, 0.4, 0.1],
-            forest: [0.5, 0.2, 0.05],
-            rock: [0.3, 0.1, 0.0],
-            snow: [0.8, 0.5, 0.4] 
-        },
-        {
-            deep: [0.05, 0.1, 0.3],
-            shallow: [0.3, 0.5, 0.8],
-            sand: [0.7, 0.8, 0.9],
-            grass: [0.8, 0.9, 1.0], 
-            forest: [0.5, 0.6, 0.7],
-            rock: [0.2, 0.3, 0.4],
-            snow: [1.0, 1.0, 1.0]
-        },
-        {
-            deep: [0.1, 0.0, 0.2], 
-            shallow: [0.4, 0.0, 0.6],
-            sand: [0.1, 0.1, 0.1], 
-            grass: [0.2, 0.8, 0.2], 
-            forest: [0.4, 0.0, 0.4], 
-            rock: [0.2, 0.2, 0.25],
-            snow: [0.0, 1.0, 0.5] 
-        }
-    ];
+    const randomCol = (min, max) => {
+        const range = max - min;
+        return [
+            min + Math.random() * range,
+            min + Math.random() * range,
+            min + Math.random() * range
+        ];
+    };
 
-    const theme = themes[Math.floor(Math.random() * themes.length)];
+    const shiftCol = (baseCol, variation) => {
+        return [
+            Math.min(1, Math.max(0, baseCol[0] + (Math.random() - 0.5) * variation)),
+            Math.min(1, Math.max(0, baseCol[1] + (Math.random() - 0.5) * variation)),
+            Math.min(1, Math.max(0, baseCol[2] + (Math.random() - 0.5) * variation))
+        ];
+    };
 
-    state.palette.deepWater = theme.deep;
-    state.palette.shallowWater = theme.shallow;
-    state.palette.sand = theme.sand;
-    state.palette.grass = theme.grass;
-    state.palette.forest = theme.forest;
-    state.palette.rock = theme.rock;
-    state.palette.snow = theme.snow;
-    
+    state.palette.deepWater = randomCol(0.0, 0.3);
+
+    if (Math.random() > 0.5) {
+        state.palette.shallowWater = shiftCol(state.palette.deepWater, 0.5);
+        state.palette.shallowWater = state.palette.shallowWater.map(c => c + 0.3); 
+    } else {
+        state.palette.shallowWater = randomCol(0.2, 0.8);
+    }
+
+    state.palette.sand = randomCol(0.5, 1.0);
+
+    state.palette.grass = randomCol(0.1, 0.8);
+
+    if (Math.random() > 0.7) {
+        state.palette.forest = randomCol(0.0, 0.5);
+    } else {
+        state.palette.forest = shiftCol(state.palette.grass, 0.3).map(c => c * 0.7);
+    }
+
+    state.palette.rock = randomCol(0.2, 0.6);
+    state.palette.snow = randomCol(0.85, 1.0);
     triggerPlanetAnimation();
 }
 
@@ -707,6 +696,11 @@ function render() {
     gl.vertexAttribPointer(sPos, 3, gl.FLOAT, false, 0, 0);
     gl.uniformMatrix4fv(gl.getUniformLocation(shadowProgram, 'uModel'), false, planeModelMatrix);
     if (planeVertexCount > 0) gl.drawArrays(gl.TRIANGLES, 0, planeVertexCount);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, cloudPositionBuffer);
+    gl.vertexAttribPointer(sPos, 3, gl.FLOAT, false, 0, 0);
+    gl.uniformMatrix4fv(gl.getUniformLocation(shadowProgram, 'uModel'), false, cloudModelMatrix);
+    if (cloudVertexCount > 0) gl.drawArrays(gl.TRIANGLES, 0, cloudVertexCount);
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, canvas.width, canvas.height);

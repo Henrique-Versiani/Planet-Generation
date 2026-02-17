@@ -5,79 +5,227 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Planeta Low Poly Procedural</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #111; font-family: 'Segoe UI', sans-serif; }
-        canvas { display: block; width: 100vw; height: 100vh; cursor: crosshair; }
+        :root {
+            --primary: #4db8ff;
+            --glass: rgba(20, 20, 25, 0.75);
+            --border: rgba(255, 255, 255, 0.1);
+            --text: #e0e0e0;
+            --input-bg: rgba(0, 0, 0, 0.3);
+        }
+
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background: #050508; 
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
+            color: var(--text);
+        }
         
-        #ui-container {
+        canvas { display: block; width: 100vw; height: 100vh; cursor: crosshair; }
+
+        #toggle-btn {
             position: absolute;
             top: 20px;
             left: 20px;
-            width: 280px;
-            max-height: 90vh;
-            overflow-y: auto;
-            padding: 20px;
-            background: rgba(30, 30, 30, 0.9);
+            width: 40px;
+            height: 40px;
+            background: var(--glass);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border);
+            border-radius: 8px;
             color: white;
-            border-radius: 12px;
-            backdrop-filter: blur(5px);
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            font-size: 1.2rem;
+            cursor: pointer;
+            z-index: 20;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        #toggle-btn:hover { background: var(--primary); border-color: var(--primary); }
+
+        #ui-container {
+            position: absolute;
+            top: 70px;
+            left: 20px;
+            width: 300px;
+            max-height: calc(100vh - 100px);
+            overflow-y: auto;
+            padding: 25px;
+
+            background: var(--glass);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            
             z-index: 10;
+            transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s;
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        #ui-container.hidden {
+            transform: translateX(-150%);
+            opacity: 0;
+            pointer-events: none;
         }
 
         #ui-container::-webkit-scrollbar { width: 6px; }
-        #ui-container::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+        #ui-container::-webkit-scrollbar-track { background: transparent; }
+        #ui-container::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
+        #ui-container::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.4); }
 
-        h3 { margin-top: 0; text-align: center; color: #4db8ff; text-transform: uppercase; font-size: 1.1rem; }
-        h4 { margin: 15px 0 10px 0; color: #ccc; border-bottom: 1px solid #555; padding-bottom: 5px; font-size: 0.9rem; }
+        h3 { 
+            margin: 0 0 20px 0; 
+            text-align: center; 
+            color: var(--primary); 
+            text-transform: uppercase; 
+            font-size: 1rem; 
+            letter-spacing: 2px; 
+            font-weight: 800;
+        }
         
-        .control-group { margin-bottom: 10px; }
-        label { display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; margin-bottom: 5px; color: #ccc; font-weight: bold; }
-        
-        input[type=range] { width: 100%; cursor: pointer; }
-        input[type=color] { border: none; width: 30px; height: 20px; cursor: pointer; background: none; }
-        
-        select {
-            width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #555;
-            background: #222; color: white; cursor: pointer;
+        h4 { 
+            margin: 25px 0 10px 0; 
+            color: #fff; 
+            font-size: 0.85rem; 
+            opacity: 0.7; 
+            border-bottom: 1px solid var(--border); 
+            padding-bottom: 5px; 
         }
 
-        .seed-container { display: flex; gap: 5px; margin-bottom: 10px; }
-        #seedInput { 
-            width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #555; 
-            background: #222; color: #fff; font-family: monospace; text-align: center; 
+        .control-group { margin-bottom: 12px; }
+        
+        label { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            font-size: 0.8rem; 
+            margin-bottom: 6px; 
+            font-weight: 600; 
+            color: #ccc;
         }
+
+        input[type=text], select {
+            width: 100%;
+            padding: 10px;
+            background: var(--input-bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--primary);
+            font-family: 'Courier New', monospace;
+            text-align: center;
+            outline: none;
+            box-sizing: border-box;
+            transition: border-color 0.2s;
+        }
+        input[type=text]:focus, select:focus { border-color: var(--primary); }
+
+        select { font-family: 'Segoe UI', sans-serif; cursor: pointer; appearance: none; }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+            margin: 5px 0;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            background: var(--input-bg);
+            border-radius: 3px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: var(--primary);
+            margin-top: -5px;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(77, 184, 255, 0.5);
+            transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+        input[type=color] {
+            -webkit-appearance: none;
+            border: none;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            background: none;
+            padding: 0;
+        }
+        input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type=color]::-webkit-color-swatch {
+            border: 2px solid var(--border);
+            border-radius: 50%;
+        }
+
+        .btn-group { display: flex; gap: 8px; margin-top: 10px; }
         
         button { 
-            width: 100%; padding: 10px; cursor: pointer; 
-            background: linear-gradient(45deg, #0077ff, #00bbff); 
-            border: none; color: white; border-radius: 6px; font-weight: bold;
-            transition: transform 0.1s;
-            margin-top: 5px;
+            width: 100%; 
+            padding: 12px; 
+            cursor: pointer; 
+            background: linear-gradient(135deg, #0077ff, #00bbff); 
+            border: none; 
+            color: white; 
+            border-radius: 8px; 
+            font-weight: 700;
+            font-size: 0.85rem;
+            transition: transform 0.1s, box-shadow 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
-        button.secondary { background: #444; margin-top: 0; }
-        button:hover { transform: translateY(-2px); }
+        button:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0, 119, 255, 0.4); }
         button:active { transform: translateY(0); }
         
-        .hint { font-size: 0.8rem; color: #aaa; font-style: italic; margin-top: 10px; text-align: center; }
+        button.secondary { 
+            background: transparent; 
+            border: 1px solid var(--border); 
+            color: #aaa; 
+            font-size: 0.75rem;
+            padding: 8px;
+        }
+        button.secondary:hover { border-color: var(--text); color: white; background: rgba(255,255,255,0.05); box-shadow: none; }
+
+        .hint { 
+            font-size: 0.75rem; 
+            color: #777; 
+            font-style: italic; 
+            margin-top: 20px; 
+            text-align: center; 
+            border-top: 1px solid var(--border);
+            padding-top: 15px;
+        }
     </style>
 </head>
 <body>
     <canvas id="glCanvas"></canvas>
     
+    <button id="toggle-btn" title="Esconder/Mostrar Menu">☰</button>
+
     <div id="ui-container">
-        <h3>Controles do Mundo</h3>
+        <h3>Controles</h3>
         
         <h4>Semente (Seed)</h4>
-        <div class="seed-container">
+        <div class="control-group">
             <input type="text" id="seedInput" placeholder="Digite uma seed...">
         </div>
-        <div class="seed-container">
+        <div class="btn-group">
             <button id="btnLoadSeed" class="secondary">Carregar</button>
             <button id="btnCopySeed" class="secondary">Copiar</button>
         </div>
-        <button id="btnRegenerate">🎲 Gerar Aleatório</button>
+        <div style="margin-top: 10px;">
+            <button id="btnRegenerate">🎲 Gerar Aleatório</button>
+        </div>
 
-        <h4>Física e Atmosfera</h4>
+        <h4>Atmosfera & Física</h4>
         <div class="control-group">
             <label>☀️ Posição do Sol</label>
             <input type="range" id="sunPosition" min="0" max="6.28" step="0.01" value="1.0">
@@ -91,7 +239,7 @@
             <input type="range" id="resolution" min="0" max="7" step="1" value="5">
         </div>
 
-        <h4>Terreno</h4>
+        <h4>Geologia</h4>
         <div class="control-group">
             <label>Algoritmo de Ruído</label>
             <select id="noiseType">
@@ -140,7 +288,7 @@
             <label>Neve <input type="color" id="colSnow" value="#F5F5FF"></label>
         </div>
 
-        <div class="hint">Clique no terreno para plantar árvores.</div>
+        <div class="hint">🖱️ Clique no planeta para plantar árvores.</div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js"></script>
@@ -149,5 +297,20 @@
     <script src="js/utils.js"></script>
     <script src="js/geometry.js"></script>
     <script src="js/main.js"></script>
+
+    <script>
+        const toggleBtn = document.getElementById('toggle-btn');
+        const uiContainer = document.getElementById('ui-container');
+
+        toggleBtn.addEventListener('click', () => {
+            uiContainer.classList.toggle('hidden');
+            // Muda o ícone
+            if(uiContainer.classList.contains('hidden')) {
+                toggleBtn.innerHTML = '⚙️'; // Ícone de engrenagem quando fechado
+            } else {
+                toggleBtn.innerHTML = '☰'; // Ícone de menu quando aberto
+            }
+        });
+    </script>
 </body>
 </html>
