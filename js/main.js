@@ -141,7 +141,8 @@ const state = {
 let currentSeedString = "Planeta" + Math.floor(Math.random() * 1000);
 let numericSeed = 0; 
 
-let plantedTrees = []; 
+let plantedTrees = [];
+let lastPlantTime = 0;
 let currentPlanetGeometry = null;
 let simplexInstance = null; 
 let vertexCount = 0;
@@ -260,7 +261,15 @@ function castRay(mouseX, mouseY) {
         const radius = Math.sqrt(hitPoint[0]*hitPoint[0] + hitPoint[1]*hitPoint[1] + hitPoint[2]*hitPoint[2]);
         const altitude = radius - state.waterLevel;
         if (altitude > 0.02 && altitude < 0.35) {
-            plantedTrees.push({ x: hitPoint[0], y: hitPoint[1], z: hitPoint[2] });
+            const now = performance.now();
+            plantedTrees.push({ 
+                x: hitPoint[0], 
+                y: hitPoint[1], 
+                z: hitPoint[2],
+                startTime: now 
+            });
+
+            lastPlantTime = now; 
             updatePlanetGeometry(); 
         }
     }
@@ -319,10 +328,10 @@ function updatePlanetGeometry() {
     planet.applyNoise(state.noiseStrength, state.noiseFreq, state.waterLevel, getNoiseVal);
     planet.generateColors(state.waterLevel, getNoiseVal, state.noiseStrength, state.noiseFreq, state.deepWaterThreshold, state.palette);
     planet.toFlatGeometry(); 
-    planet.distributeTrees(plantedTrees, state.waterLevel, getNoiseVal, state.noiseStrength, state.noiseFreq);
+    planet.distributeTrees(plantedTrees, state.waterLevel, getNoiseVal, state.noiseStrength, state.noiseFreq, performance.now());
     
     planet.calculateNormals();
-    currentPlanetGeometry = planet; 
+    currentPlanetGeometry = planet;
 
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(planet.vertices), gl.STATIC_DRAW);
     gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(planet.normals), gl.STATIC_DRAW);
@@ -629,6 +638,10 @@ async function loadAirplane() {
 }
 
 function render() {
+    if (typeof lastPlantTime !== 'undefined' && performance.now() - lastPlantTime < 1500) {
+        updatePlanetGeometry();
+    }
+
     if (!isDragging) planetRotY += autoRotateSpeed;
     cloudRotY += autoRotateSpeed * 1.5; 
     

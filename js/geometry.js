@@ -144,30 +144,49 @@ class IcoSphere {
         return { v: treeVertices, c: treeColors };
     }
 
-    distributeTrees(plantedPositions, waterLevel, noiseFn, strength, freq) {
+    distributeTrees(plantedPositions, waterLevel, noiseFn, strength, freq, currentTime) {
         const newVertices = [...this.vertices];
         const newColors = [...this.colors];
-        const mat = mat4.create(); const q = quat.create(); const up = vec3.fromValues(0, 1, 0);
-        const pos = vec3.create(); const norm = vec3.create(); const treePos = vec3.create();
+        const mat = mat4.create(); 
+        const q = quat.create(); 
+        const up = vec3.fromValues(0, 1, 0);
+        const pos = vec3.create(); 
+        const norm = vec3.create(); 
+        const treePos = vec3.create();
+
+        const growDuration = 1500;
 
         for (let i = 0; i < plantedPositions.length; i++) {
             const p = plantedPositions[i];
             const seed = p.x + p.y + p.z;
+            
             vec3.set(norm, p.x, p.y, p.z);
             vec3.normalize(norm, norm);
 
             const noiseVal = noiseFn(norm[0] * freq, norm[1] * freq, norm[2] * freq);
-            
             let height = 1.0 + (noiseVal * strength);
+            
             if (height <= waterLevel) continue; 
             const altitude = height - waterLevel;
             if (altitude < 0.02 || altitude > 0.35) continue; 
+
+            let scale = 1.0;
+            if (p.startTime) {
+                const elapsed = currentTime - p.startTime;
+                if (elapsed < growDuration) {
+                    const progress = elapsed / growDuration;
+                    scale = Utils.easeOutElastic(progress);
+                }
+            }
+
+            if (scale <= 0.01) continue;
 
             vec3.scale(pos, norm, height);
 
             const treeGeom = this.getTreeGeometry(seed);
             quat.rotationTo(q, up, norm);
-            mat4.fromRotationTranslation(mat, q, pos);
+
+            mat4.fromRotationTranslationScale(mat, q, pos, [scale, scale, scale]);
 
             for (let j = 0; j < treeGeom.v.length; j+=3) {
                 vec3.set(treePos, treeGeom.v[j], treeGeom.v[j+1], treeGeom.v[j+2]);
